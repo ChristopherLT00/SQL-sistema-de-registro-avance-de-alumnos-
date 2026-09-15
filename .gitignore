@@ -1,0 +1,6 @@
+node_modules/
+.env
+frontend/dist/
+copiadeseguridad_1/
+*.log
+.DS_Store

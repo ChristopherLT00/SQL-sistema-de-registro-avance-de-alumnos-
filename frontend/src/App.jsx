@@ -1,0 +1,1270 @@
+import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
+import {
+  Users,
+  ClipboardList,
+  UserSearch,
+  Table2,
+  Check,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Loader2,
+  CheckCircle2,
+  Search,
+  BookOpen,
+  Copy,
+  Download,
+  Pencil,
+  X,
+  Save,
+  LogOut,
+} from "lucide-react";
+import {
+  fetchAlumnos,
+  fetchMaterias,
+  fetchInscripciones,
+  fetchProgreso,
+  registrarAvance,
+  registrarAvanceLote,
+  updateAlumno,
+  createMateria,
+  syncInscripciones,
+  login as apiLogin,
+  setToken,
+  clearToken,
+  isLoggedIn,
+} from "./api";
+import { generarPDFAvance, generarPDFMatriz } from "./pdf";
+import { generarExcelAvance, generarExcelMatriz } from "./excel";
+
+/* ------------------------------------------------------------------ */
+/*  Catalogos (definidos en frontend, no en la DB)                     */
+/* ------------------------------------------------------------------ */
+
+const HITOS = [
+  "1", "2", "3", "4", "Int 1", "Parcial 1",
+  "6", "7", "8", "9", "Int 2", "Parcial 2",
+  "11", "12", "13", "Int 3", "Final",
+];
+
+const VISTAS = [
+  { id: "credenciales", nombre: "Credenciales de alumnos", icon: Users },
+  { id: "registro", nombre: "Registro semanal", icon: ClipboardList },
+  { id: "avance", nombre: "Avance individual", icon: UserSearch },
+  { id: "matriz", nombre: "Matriz general", icon: Table2 },
+];
+
+/* ------------------------------------------------------------------ */
+/*  Componentes auxiliares                                             */
+/* ------------------------------------------------------------------ */
+
+function StatusChip({ entregado }) {
+  if (entregado) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+        <Check className="h-3 w-3" strokeWidth={2.5} />
+        Entregado
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-400">
+      Pendiente
+    </span>
+  );
+}
+
+function Indicador({ entregado }) {
+  if (entregado) {
+    return (
+      <div className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600">
+        <Check className="h-3 w-3 text-white" strokeWidth={3} />
+      </div>
+    );
+  }
+  return <div className="mx-auto h-5 w-5 rounded-full border border-gray-200" />;
+}
+
+function LoadingScreen() {
+  return (
+    <div className="flex h-64 w-full flex-col items-center justify-center gap-3 text-gray-400">
+      <Loader2 className="h-6 w-6 animate-spin" />
+      <p className="text-sm">Cargando datos academicos...</p>
+    </div>
+  );
+}
+
+function Toast({ mensaje, onclose }) {
+  const [animState, setAnimState] = useState("entering");
+
+  useEffect(() => {
+    if (!mensaje) {
+      setAnimState("entering");
+      return;
+    }
+    setAnimState("entering");
+    const t1 = setTimeout(() => setAnimState("visible"), 400);
+    return () => clearTimeout(t1);
+  }, [mensaje]);
+
+  const handleClose = () => {
+    setAnimState("exiting");
+    setTimeout(onclose, 300);
+  };
+
+  useEffect(() => {
+    if (!mensaje || animState !== "visible") return;
+    const t = setTimeout(handleClose, 3500);
+    return () => clearTimeout(t);
+  }, [mensaje, animState]);
+
+  if (!mensaje && animState !== "exiting") return null;
+
+  return (
+    <div className={`fixed right-6 top-6 z-50 ${animState === "entering" ? "toast-enter" : animState === "exiting" ? "toast-exit" : ""}`}>
+      <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/70 px-5 py-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/10">
+          <CheckCircle2 className="h-5 w-5 text-green-600" />
+        </div>
+        <span className="text-sm font-medium text-gray-800">{mensaje}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  LoginForm                                                          */
+/* ------------------------------------------------------------------ */
+
+function LoginForm({ onLogin }) {
+  const [usuario, setUsuario] = useState("");
+  const [contrasena, setContrasena] = useState("");
+  const [error, setError] = useState("");
+  const [cargando, setCargando] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!usuario.trim() || !contrasena.trim()) return;
+    setCargando(true);
+    setError("");
+    try {
+      const data = await apiLogin(usuario.trim(), contrasena);
+      setToken(data.token);
+      onLogin();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center mb-8">
+          <img
+            src="/magnoliaslogo.jpeg"
+            alt="Magnolias"
+            className="h-20 w-20 rounded-2xl object-cover shadow-lg mb-4"
+          />
+          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Calificaciones</h1>
+          <p className="text-sm text-gray-400 mt-1">Ciclo escolar 2026</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm space-y-5">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Usuario</label>
+            <input
+              type="text"
+              value={usuario}
+              onChange={(e) => setUsuario(e.target.value)}
+              autoFocus
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Contrasena</label>
+            <input
+              type="password"
+              value={contrasena}
+              onChange={(e) => setContrasena(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</div>
+          )}
+
+          <button
+            type="submit"
+            disabled={cargando || !usuario.trim() || !contrasena.trim()}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+          >
+            {cargando && <Loader2 className="h-4 w-4 animate-spin" />}
+            Iniciar sesion
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Vista 1: Credenciales de alumnos                                   */
+/* ------------------------------------------------------------------ */
+
+function VistaCredenciales({ alumnos, onActualizar }) {
+  const [visibles, setVisibles] = useState({});
+  const [copiado, setCopiado] = useState(null);
+  const [editando, setEditando] = useState(null);
+  const [form, setForm] = useState({ nombre: "", cuenta: "", contrasena: "" });
+  const [guardando, setGuardando] = useState(false);
+  const [exito, setExito] = useState(null);
+
+  const [editandoMaterias, setEditandoMaterias] = useState(null);
+  const [todasMaterias, setTodasMaterias] = useState([]);
+  const [materiasSeleccionadas, setMateriasSeleccionadas] = useState([]);
+  const [busquedaMateria, setBusquedaMateria] = useState("");
+  const [guardandoMaterias, setGuardandoMaterias] = useState(false);
+
+  const alternar = (id) => {
+    setVisibles((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const copiar = (id, valor, tipo) => {
+    navigator.clipboard.writeText(valor).then(() => {
+      setCopiado(`${id}-${tipo}`);
+      setTimeout(() => setCopiado(null), 2000);
+    });
+  };
+
+  const abrirEditar = (alumno) => {
+    setEditando(alumno.id_alumno);
+    setForm({ nombre: alumno.nombre, cuenta: alumno.cuenta, contrasena: alumno.contrasena });
+  };
+
+  const cerrarEditar = () => {
+    setEditando(null);
+    setForm({ nombre: "", cuenta: "", contrasena: "" });
+  };
+
+  const guardarCambios = async () => {
+    if (!form.nombre.trim() || !form.cuenta.trim() || !form.contrasena.trim()) return;
+    setGuardando(true);
+    try {
+      await updateAlumno(editando, form);
+      await onActualizar();
+      cerrarEditar();
+      setExito("Los datos del alumno se guardaron correctamente.");
+    } catch (err) {
+      console.error("Error al actualizar:", err);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const abrirMaterias = async (alumno) => {
+    setEditandoMaterias(alumno.id_alumno);
+    setBusquedaMateria("");
+    try {
+      const [materias, inscripciones] = await Promise.all([
+        fetchMaterias(),
+        fetchInscripciones(),
+      ]);
+      setTodasMaterias(materias);
+      const asignadas = inscripciones
+        .filter((i) => i.id_alumno === alumno.id_alumno)
+        .map((i) => i.id_materia);
+      setMateriasSeleccionadas(asignadas);
+    } catch (err) {
+      console.error("Error al cargar materias:", err);
+    }
+  };
+
+  const cerrarMaterias = () => {
+    setEditandoMaterias(null);
+    setTodasMaterias([]);
+    setMateriasSeleccionadas([]);
+    setBusquedaMateria("");
+  };
+
+  const toggleMateria = (idMateria) => {
+    setMateriasSeleccionadas((prev) =>
+      prev.includes(idMateria) ? prev.filter((id) => id !== idMateria) : [...prev, idMateria]
+    );
+  };
+
+  const crearYAsignarMateria = async () => {
+    if (!busquedaMateria.trim()) return;
+    try {
+      const nueva = await createMateria(busquedaMateria.trim());
+      setTodasMaterias((prev) => {
+        if (prev.some((m) => m.id_materia === nueva.id_materia)) return prev;
+        return [...prev, nueva].sort((a, b) => a.nombre.localeCompare(b.nombre));
+      });
+      setMateriasSeleccionadas((prev) => [...prev, nueva.id_materia]);
+      setBusquedaMateria("");
+    } catch (err) {
+      console.error("Error al crear materia:", err);
+    }
+  };
+
+  const guardarMaterias = async () => {
+    setGuardandoMaterias(true);
+    try {
+      await syncInscripciones(editandoMaterias, materiasSeleccionadas);
+      await onActualizar();
+      cerrarMaterias();
+      setExito("Materias actualizadas correctamente.");
+    } catch (err) {
+      console.error("Error al sincronizar materias:", err);
+    } finally {
+      setGuardandoMaterias(false);
+    }
+  };
+
+  const materiasFiltradas = todasMaterias.filter((m) =>
+    m.nombre.toLowerCase().includes(busquedaMateria.toLowerCase())
+  );
+
+  const existeMateria = todasMaterias.some(
+    (m) => m.nombre.toLowerCase() === busquedaMateria.trim().toLowerCase()
+  );
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900">
+          <KeyRound className="h-5 w-5 text-gray-400" />
+          Credenciales de alumnos
+        </h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Cuentas de acceso registradas para el ciclo escolar en curso. Informacion de uso interno.
+        </p>
+      </div>
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50 text-left text-gray-500">
+              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide">Nombre</th>
+              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide">Cuenta</th>
+              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide">Contrasena</th>
+              <th className="px-6 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {alumnos.map((alumno, idx) => (
+              <tr key={alumno.id_alumno} className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"} hover:bg-gray-100/60 transition-colors`}>
+                <td className="px-6 py-4 text-gray-900">{alumno.nombre}</td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-gray-500">{alumno.cuenta}</span>
+                    <button
+                      type="button"
+                      onClick={() => copiar(alumno.id_alumno, alumno.cuenta, "cuenta")}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors ${
+                        copiado === `${alumno.id_alumno}-cuenta`
+                          ? "bg-green-100 text-green-700"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                      }`}
+                    >
+                      {copiado === `${alumno.id_alumno}-cuenta` ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                    </button>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-gray-500">
+                      {visibles[alumno.id_alumno] ? alumno.contrasena : "••••••••••"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => alternar(alumno.id_alumno)}
+                      className="text-gray-300 hover:text-gray-600"
+                      aria-label="Mostrar u ocultar contrasena"
+                    >
+                      {visibles[alumno.id_alumno] ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copiar(alumno.id_alumno, alumno.contrasena, "contra")}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors ${
+                        copiado === `${alumno.id_alumno}-contra`
+                          ? "bg-green-100 text-green-700"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                      }`}
+                    >
+                      {copiado === `${alumno.id_alumno}-contra` ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                    </button>
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => abrirMaterias(alumno)}
+                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                    >
+                      <BookOpen className="h-3 w-3" />
+                      Asignar materias
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => abrirEditar(alumno)}
+                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Editar
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {editando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Editar datos del alumno</h3>
+              <button
+                type="button"
+                onClick={cerrarEditar}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Nombre</label>
+                <input
+                  type="text"
+                  value={form.nombre}
+                  onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Cuenta</label>
+                <input
+                  type="text"
+                  value={form.cuenta}
+                  onChange={(e) => setForm({ ...form, cuenta: e.target.value })}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Contrasena</label>
+                <input
+                  type="text"
+                  value={form.contrasena}
+                  onChange={(e) => setForm({ ...form, contrasena: e.target.value })}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={cerrarEditar}
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={guardarCambios}
+                disabled={guardando || !form.nombre.trim() || !form.cuenta.trim() || !form.contrasena.trim()}
+                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {guardando ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editandoMaterias && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Asignar materias — {alumnos.find((a) => a.id_alumno === editandoMaterias)?.nombre}
+              </h3>
+              <button
+                type="button"
+                onClick={cerrarMaterias}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="relative mb-4">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar materia..."
+                value={busquedaMateria}
+                onChange={(e) => setBusquedaMateria(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            {busquedaMateria.trim() && !existeMateria && (
+              <button
+                type="button"
+                onClick={crearYAsignarMateria}
+                className="mb-3 w-full rounded-xl border border-dashed border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+              >
+                + Crear materia "{busquedaMateria.trim()}" y asignarla
+              </button>
+            )}
+
+            <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
+              {materiasFiltradas.length === 0 ? (
+                <p className="text-sm text-gray-400">
+                  {busquedaMateria ? "No se encontraron materias." : "No hay materias disponibles."}
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {materiasFiltradas.map((m) => (
+                    <label
+                      key={m.id_materia}
+                      className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                        materiasSeleccionadas.includes(m.id_materia)
+                          ? "bg-blue-50 text-blue-900"
+                          : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={materiasSeleccionadas.includes(m.id_materia)}
+                        onChange={() => toggleMateria(m.id_materia)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      {m.nombre}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <p className="mt-2 text-xs text-gray-400">
+              {materiasSeleccionadas.length} materia(s) asignada(s)
+            </p>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={cerrarMaterias}
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={guardarMaterias}
+                disabled={guardandoMaterias}
+                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {guardandoMaterias ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Toast mensaje={exito} onclose={() => setExito(null)} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Vista 2: Registro semanal (multi-materia)                          */
+/* ------------------------------------------------------------------ */
+
+function VistaRegistro({ alumnos, materias, inscripciones, progreso, onRegistrar, onRegistrarLote }) {
+  const [alumnoId, setAlumnoId] = useState("");
+  const [materiasIds, setMateriasIds] = useState([]);
+  const [hito, setHito] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState(null);
+
+  const materiasDisponibles = useMemo(() => {
+    return inscripciones
+      .filter((i) => i.id_alumno === Number(alumnoId))
+      .map((i) => {
+        const materia = materias.find((m) => m.id_materia === i.id_materia);
+        return {
+          id_alumno: i.id_alumno,
+          id_materia: i.id_materia,
+          nombre: materia?.nombre ?? "Materia sin registrar",
+        };
+      });
+  }, [alumnoId, inscripciones, materias]);
+
+  const manejarAlumno = (valor) => {
+    setAlumnoId(valor);
+    setMateriasIds([]);
+    setHito("");
+  };
+
+  const toggleMateria = (idMateria) => {
+    setMateriasIds((prev) =>
+      prev.includes(idMateria) ? prev.filter((id) => id !== idMateria) : [...prev, idMateria]
+    );
+  };
+
+  const seleccionarTodas = () => {
+    setMateriasIds(materiasDisponibles.map((m) => m.id_materia));
+  };
+
+  const limpiarSeleccion = () => {
+    setMateriasIds([]);
+  };
+
+  const todasSeleccionadas = materiasDisponibles.length > 0 && materiasIds.length === materiasDisponibles.length;
+
+  const manejarRegistro = async () => {
+    if (!alumnoId || materiasIds.length === 0 || !hito) return;
+    setGuardando(true);
+    if (materiasIds.length === 1) {
+      await onRegistrar(Number(alumnoId), materiasIds[0], hito);
+    } else {
+      await onRegistrarLote(Number(alumnoId), hito, materiasIds);
+    }
+    setGuardando(false);
+    setMensaje(`${materiasIds.length} materia(s) registrada(s) correctamente.`);
+    setMateriasIds([]);
+    setHito("");
+  };
+
+  const alumnoSeleccionado = alumnos.find((a) => a.id_alumno === Number(alumnoId));
+
+  const campoSelect =
+    "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-300";
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-gray-900">Registro semanal</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Selecciona al alumno, las materias correspondientes y el hito a evaluar para registrar su avance.
+        </p>
+      </div>
+
+      <div className="space-y-5 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">Alumno</label>
+          <select value={alumnoId} onChange={(e) => manejarAlumno(e.target.value)} className={campoSelect}>
+            <option value="">Selecciona un alumno</option>
+            {alumnos.map((a) => (
+              <option key={a.id_alumno} value={a.id_alumno}>
+                {a.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {alumnoId ? (
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-700">Materias</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={seleccionarTodas}
+                  disabled={todasSeleccionadas}
+                  className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-300"
+                >
+                  Seleccionar todas
+                </button>
+                <span className="text-gray-300">|</span>
+                <button
+                  type="button"
+                  onClick={limpiarSeleccion}
+                  disabled={materiasIds.length === 0}
+                  className="text-xs font-medium text-gray-500 hover:text-gray-700 disabled:text-gray-300"
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+            <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
+              {materiasDisponibles.length === 0 ? (
+                <p className="text-sm text-gray-400">Este alumno no tiene materias asignadas.</p>
+              ) : (
+                <div className="space-y-1">
+                  {materiasDisponibles.map((m) => (
+                    <label
+                      key={m.id_materia}
+                      className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                        materiasIds.includes(m.id_materia) ? "bg-blue-50 text-blue-900" : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={materiasIds.includes(m.id_materia)}
+                        onChange={() => toggleMateria(m.id_materia)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      {m.nombre}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            {materiasIds.length > 0 && (
+              <p className="mt-1.5 text-xs text-gray-400">{materiasIds.length} materia(s) seleccionada(s)</p>
+            )}
+          </div>
+        ) : null}
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">Hito</label>
+          <select
+            value={hito}
+            onChange={(e) => setHito(e.target.value)}
+            disabled={materiasIds.length === 0}
+            className={campoSelect}
+          >
+            <option value="">
+              {materiasIds.length > 0 ? "Selecciona un hito" : "Primero selecciona las materias"}
+            </option>
+            {HITOS.map((h) => (
+              <option key={h} value={h}>
+                {h}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="button"
+          onClick={manejarRegistro}
+          disabled={!alumnoId || materiasIds.length === 0 || !hito || guardando}
+          className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+        >
+          {guardando ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Check className="h-4 w-4" />
+          )}
+          Registrar avance
+        </button>
+      </div>
+
+      {alumnoSeleccionado ? (
+        <p className="text-xs text-gray-400">
+          Registrando para {alumnoSeleccionado.nombre}
+          {hito ? ` — hito ${hito}` : ""}
+        </p>
+      ) : null}
+
+      <Toast mensaje={mensaje} onclose={() => setMensaje(null)} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Vista 3: Avance individual                                         */
+/* ------------------------------------------------------------------ */
+
+function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
+  const [alumnoId, setAlumnoId] = useState("");
+  const [filtro, setFiltro] = useState("todos");
+  const [hitoSeleccionado, setHitoSeleccionado] = useState("todos");
+
+  const datos = useMemo(() => {
+    if (!alumnoId) return [];
+    return inscripciones
+      .filter((i) => i.id_alumno === Number(alumnoId))
+      .map((i) => {
+        const materia = materias.find((m) => m.id_materia === i.id_materia);
+        const hitos = HITOS.map((h) => {
+          const registro = progreso.find(
+            (p) => p.id_alumno === i.id_alumno && p.id_materia === i.id_materia && p.hito === h
+          );
+          return { hito: h, cumplio: !!registro?.cumplio, fecha_registro: registro?.fecha_registro };
+        });
+        return { materia, hitos };
+      });
+  }, [alumnoId, inscripciones, materias, progreso]);
+
+  const filtrarHitos = (hitos) => {
+    let resultado = hitos;
+    if (hitoSeleccionado !== "todos") {
+      resultado = resultado.filter((h) => h.hito === hitoSeleccionado);
+    }
+    if (filtro === "entregados") resultado = resultado.filter((h) => h.cumplio);
+    if (filtro === "pendientes") resultado = resultado.filter((h) => !h.cumplio);
+    return resultado;
+  };
+
+  const opciones = [
+    { id: "todos", nombre: "Todos" },
+    { id: "entregados", nombre: "Entregados" },
+    { id: "pendientes", nombre: "Pendientes" },
+  ];
+
+  const alumnoNombre = alumnos.find((a) => a.id_alumno === Number(alumnoId))?.nombre ?? "";
+
+  const descargarPDF = () => {
+    if (!alumnoId || datos.length === 0) return;
+    generarPDFAvance({ alumnoNombre, datos, filtro, hitoSeleccionado });
+  };
+
+  const descargarExcel = () => {
+    if (!alumnoId || datos.length === 0) return;
+    generarExcelAvance({ alumnoNombre, datos, filtro, hitoSeleccionado });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-gray-900">Avance individual</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Consulta el avance de un alumno especifico, materia por materia.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-full max-w-xs">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <select
+            value={alumnoId}
+            onChange={(e) => setAlumnoId(e.target.value)}
+            className="w-full rounded-full border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="">Buscar alumno</option>
+            {alumnos.map((a) => (
+              <option key={a.id_alumno} value={a.id_alumno}>
+                {a.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <select
+          value={hitoSeleccionado}
+          onChange={(e) => setHitoSeleccionado(e.target.value)}
+          className="rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+        >
+          <option value="todos">Todos los hitos</option>
+          {HITOS.map((h) => (
+            <option key={h} value={h}>
+              Hito {h}
+            </option>
+          ))}
+        </select>
+
+        <div className="inline-flex items-center rounded-full bg-gray-100 p-1">
+          {opciones.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => setFiltro(o.id)}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                filtro === o.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {o.nombre}
+            </button>
+          ))}
+        </div>
+
+        {alumnoId && datos.length > 0 && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={descargarPDF}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              PDF
+            </button>
+            <button
+              type="button"
+              onClick={descargarExcel}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Excel
+            </button>
+          </div>
+        )}
+      </div>
+
+      {!alumnoId ? (
+        <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-10 text-center text-sm text-gray-400">
+          Selecciona un alumno para ver su avance.
+        </p>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {datos.map(({ materia, hitos }) => {
+            const hitosFiltrados = filtrarHitos(hitos);
+            return (
+              <div key={materia?.id_materia} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                    <BookOpen className="h-4 w-4 text-gray-400" />
+                    {materia?.nombre}
+                  </h3>
+                </div>
+                {hitosFiltrados.length === 0 ? (
+                  <p className="text-sm text-gray-400">No hay hitos en esta categoria.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {hitosFiltrados.map((h) => (
+                      <div
+                        key={h.hito}
+                        className="flex items-center gap-1.5 rounded-full border border-gray-100 bg-gray-50 px-2.5 py-1"
+                      >
+                        <span className="text-xs font-medium text-gray-500">{h.hito}</span>
+                        <StatusChip entregado={h.cumplio} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Vista 4: Matriz general                                             */
+/* ------------------------------------------------------------------ */
+
+function VistaMatriz({ alumnos, materias, inscripciones, progreso }) {
+  const grupos = useMemo(() => {
+    return alumnos.map((alumno) => {
+      const filas = inscripciones
+        .filter((i) => i.id_alumno === alumno.id_alumno)
+        .map((i) => {
+          const materia = materias.find((m) => m.id_materia === i.id_materia);
+          const celdas = HITOS.map((h) => {
+            const registro = progreso.find(
+              (p) => p.id_alumno === i.id_alumno && p.id_materia === i.id_materia && p.hito === h
+            );
+            return !!registro?.cumplio;
+          });
+          return { id_alumno: i.id_alumno, id_materia: i.id_materia, materiaNombre: materia?.nombre ?? "Materia", celdas };
+        });
+      return { alumno, filas };
+    });
+  }, [alumnos, materias, inscripciones, progreso]);
+
+  const descargarMatrizPDF = () => {
+    if (grupos.length === 0) return;
+    generarPDFMatriz({ grupos, hitos: HITOS });
+  };
+
+  const descargarMatrizExcel = () => {
+    if (grupos.length === 0) return;
+    generarExcelMatriz({ grupos, hitos: HITOS });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight text-gray-900">Matriz general</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Cruce consolidado de alumnos, materias y hitos a lo largo del ciclo escolar.
+          </p>
+        </div>
+        {grupos.length > 0 && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={descargarMatrizPDF}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              PDF
+            </button>
+            <button
+              type="button"
+              onClick={descargarMatrizExcel}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Excel
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div
+        className="overflow-auto rounded-2xl border border-gray-100 bg-white shadow-sm"
+        style={{ maxHeight: "32rem" }}
+      >
+        <table className="w-full min-w-max border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="sticky left-0 top-0 z-20 w-64 border-b border-r border-gray-100 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                Alumno / Materia
+              </th>
+              {HITOS.map((h) => (
+                <th
+                  key={h}
+                  className="sticky top-0 z-10 border-b border-gray-100 bg-gray-50 px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-gray-500"
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {grupos.map((grupo, grupoIdx) => {
+              const bg = grupoIdx % 2 === 0 ? "bg-white" : "bg-blue-50/40";
+              return (
+                <Fragment key={grupo.alumno.id_alumno}>
+                  <tr>
+                    <td
+                      colSpan={HITOS.length + 1}
+                      className="sticky left-0 z-10 border-b border-gray-100 bg-gray-50 px-4 py-2.5 text-sm font-semibold text-gray-900"
+                    >
+                      {grupo.alumno.nombre}{" "}
+                      <span className="font-normal text-gray-400">cuenta {grupo.alumno.cuenta}</span>
+                    </td>
+                  </tr>
+                  {grupo.filas.map((fila) => (
+                    <tr key={`${fila.id_alumno}-${fila.id_materia}`} className={`${bg} hover:brightness-95`}>
+                      <td className={`sticky left-0 z-10 border-b border-r border-gray-100 px-4 py-2.5 pl-8 text-gray-600 ${bg}`}>
+                        {fila.materiaNombre}
+                      </td>
+                      {fila.celdas.map((entregado, cIdx) => (
+                        <td key={cIdx} className={`border-b border-gray-100 px-4 py-2.5 text-center ${bg}`}>
+                          <Indicador entregado={entregado} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex items-center gap-6 text-xs text-gray-500">
+        <span className="flex items-center gap-2">
+          <Indicador entregado={true} /> Hito entregado
+        </span>
+        <span className="flex items-center gap-2">
+          <Indicador entregado={false} /> Hito pendiente
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Aplicacion principal                                                */
+/* ------------------------------------------------------------------ */
+
+export default function App() {
+  const [autenticado, setAutenticado] = useState(isLoggedIn);
+  const [vista, setVista] = useState("credenciales");
+  const [cargando, setCargando] = useState(true);
+  const [alumnos, setAlumnos] = useState([]);
+  const [materias, setMaterias] = useState([]);
+  const [inscripciones, setInscripciones] = useState([]);
+  const [progreso, setProgreso] = useState([]);
+
+  const cargarDatos = useCallback(async () => {
+    try {
+      const [a, m, i, p] = await Promise.all([
+        fetchAlumnos(),
+        fetchMaterias(),
+        fetchInscripciones(),
+        fetchProgreso(),
+      ]);
+      setAlumnos(a);
+      setMaterias(m);
+      setInscripciones(i);
+      setProgreso(p);
+    } catch (err) {
+      console.error("Error cargando datos:", err);
+      if (err.message.includes("401") || err.message.includes("Token")) {
+        clearToken();
+        setAutenticado(false);
+      }
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (autenticado) {
+      setCargando(true);
+      cargarDatos();
+    }
+  }, [autenticado, cargarDatos]);
+
+  const manejarLogin = () => {
+    setAutenticado(true);
+    setCargando(true);
+  };
+
+  const manejarLogout = () => {
+    clearToken();
+    setAutenticado(false);
+    setVista("credenciales");
+    setAlumnos([]);
+    setMaterias([]);
+    setInscripciones([]);
+    setProgreso([]);
+  };
+
+  if (!autenticado) {
+    return <LoginForm onLogin={manejarLogin} />;
+  }
+
+  const manejarRegistro = useCallback(async (idAlumno, idMateria, hito) => {
+    await registrarAvance(idAlumno, idMateria, hito);
+    const p = await fetchProgreso();
+    setProgreso(p);
+  }, []);
+
+  const manejarRegistroLote = useCallback(async (idAlumno, hito, materiasIds) => {
+    await registrarAvanceLote(idAlumno, hito, materiasIds);
+    const p = await fetchProgreso();
+    setProgreso(p);
+  }, []);
+
+  const manejarActualizarAlumno = useCallback(async () => {
+    const [a, m, i] = await Promise.all([
+      fetchAlumnos(),
+      fetchMaterias(),
+      fetchInscripciones(),
+    ]);
+    setAlumnos(a);
+    setMaterias(m);
+    setInscripciones(i);
+  }, []);
+
+  const vistaActual = VISTAS.find((v) => v.id === vista);
+  const fechaHoy = new Date().toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  return (
+    <div className="flex min-h-screen flex-col bg-white font-sans text-gray-900 md:flex-row">
+      <aside className="flex flex-col border-b border-gray-100 bg-white md:w-64 md:border-b-0 md:border-r">
+        <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-6">
+          <img
+            src="/magnoliaslogo.jpeg"
+            alt="Magnolias"
+            className="h-10 w-10 rounded-xl object-cover"
+          />
+          <div>
+            <p className="text-base font-semibold tracking-tight text-gray-900">Calificaciones</p>
+            <p className="text-xs text-gray-400">Ciclo escolar 2026</p>
+          </div>
+        </div>
+        <nav className="flex overflow-x-auto px-3 py-3 md:flex-1 md:flex-col md:gap-1 md:overflow-visible">
+          {VISTAS.map((v) => {
+            const Icono = v.icon;
+            const activa = v.id === vista;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setVista(v.id)}
+                className={`flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium md:w-full ${
+                  activa ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
+                <Icono className={`h-4 w-4 shrink-0 ${activa ? "text-blue-600" : "text-gray-400"}`} />
+                <span className="whitespace-nowrap">{v.nombre}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="border-t border-gray-100 px-3 py-3">
+          <button
+            type="button"
+            onClick={manejarLogout}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-500 hover:bg-red-50"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span className="whitespace-nowrap">Cerrar sesion</span>
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex flex-1 flex-col">
+        <header className="flex items-center justify-between border-b border-gray-100 bg-white px-8 py-6">
+          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{vistaActual?.nombre}</h1>
+          <p className="text-sm text-gray-400">{fechaHoy}</p>
+        </header>
+
+        <main className="flex-1 overflow-auto bg-gray-50 px-8 py-8">
+          {cargando ? (
+            <LoadingScreen />
+          ) : vista === "credenciales" ? (
+            <VistaCredenciales alumnos={alumnos} onActualizar={manejarActualizarAlumno} />
+          ) : vista === "registro" ? (
+            <VistaRegistro
+              alumnos={alumnos}
+              materias={materias}
+              inscripciones={inscripciones}
+              progreso={progreso}
+              onRegistrar={manejarRegistro}
+              onRegistrarLote={manejarRegistroLote}
+            />
+          ) : vista === "avance" ? (
+            <VistaAvance
+              alumnos={alumnos}
+              materias={materias}
+              inscripciones={inscripciones}
+              progreso={progreso}
+            />
+          ) : (
+            <VistaMatriz
+              alumnos={alumnos}
+              materias={materias}
+              inscripciones={inscripciones}
+              progreso={progreso}
+            />
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
