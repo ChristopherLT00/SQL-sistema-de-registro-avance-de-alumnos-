@@ -18,6 +18,7 @@ import {
   X,
   Save,
   LogOut,
+  UserPlus,
 } from "lucide-react";
 import {
   fetchAlumnos,
@@ -27,6 +28,7 @@ import {
   registrarAvance,
   registrarAvanceLote,
   updateAlumno,
+  createAlumno,
   createMateria,
   syncInscripciones,
   login as apiLogin,
@@ -228,6 +230,13 @@ function VistaCredenciales({ alumnos, onActualizar }) {
   const [busquedaMateria, setBusquedaMateria] = useState("");
   const [guardandoMaterias, setGuardandoMaterias] = useState(false);
 
+  const [agregando, setAgregando] = useState(false);
+  const [formNuevoAlumno, setFormNuevoAlumno] = useState({ nombre: "", cuenta: "", contrasena: "" });
+  const [materiasNuevas, setMateriasNuevas] = useState([]);
+  const [todasMateriasTmp, setTodasMateriasTmp] = useState([]);
+  const [busquedaMateriaNueva, setBusquedaMateriaNueva] = useState("");
+  const [guardandoNuevo, setGuardandoNuevo] = useState(false);
+
   const alternar = (id) => {
     setVisibles((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -332,16 +341,94 @@ function VistaCredenciales({ alumnos, onActualizar }) {
     (m) => m.nombre.toLowerCase() === busquedaMateria.trim().toLowerCase()
   );
 
+  const abrirAgregar = async () => {
+    setAgregando(true);
+    setFormNuevoAlumno({ nombre: "", cuenta: "", contrasena: "" });
+    setMateriasNuevas([]);
+    setBusquedaMateriaNueva("");
+    try {
+      const materias = await fetchMaterias();
+      setTodasMateriasTmp(materias);
+    } catch (err) {
+      console.error("Error al cargar materias:", err);
+    }
+  };
+
+  const cerrarAgregar = () => {
+    setAgregando(false);
+    setFormNuevoAlumno({ nombre: "", cuenta: "", contrasena: "" });
+    setMateriasNuevas([]);
+    setBusquedaMateriaNueva("");
+    setTodasMateriasTmp([]);
+  };
+
+  const toggleMateriaNueva = (idMateria) => {
+    setMateriasNuevas((prev) =>
+      prev.includes(idMateria) ? prev.filter((id) => id !== idMateria) : [...prev, idMateria]
+    );
+  };
+
+  const crearMateriaNueva = async () => {
+    if (!busquedaMateriaNueva.trim()) return;
+    try {
+      const nueva = await createMateria(busquedaMateriaNueva.trim());
+      setTodasMateriasTmp((prev) => {
+        if (prev.some((m) => m.id_materia === nueva.id_materia)) return prev;
+        return [...prev, nueva].sort((a, b) => a.nombre.localeCompare(b.nombre));
+      });
+      setMateriasNuevas((prev) => [...prev, nueva.id_materia]);
+      setBusquedaMateriaNueva("");
+    } catch (err) {
+      console.error("Error al crear materia:", err);
+    }
+  };
+
+  const guardarNuevoAlumno = async () => {
+    if (!formNuevoAlumno.nombre.trim() || !formNuevoAlumno.cuenta.trim() || !formNuevoAlumno.contrasena.trim()) return;
+    setGuardandoNuevo(true);
+    try {
+      const nuevo = await createAlumno(formNuevoAlumno);
+      if (materiasNuevas.length > 0) {
+        await syncInscripciones(nuevo.id_alumno, materiasNuevas);
+      }
+      await onActualizar();
+      cerrarAgregar();
+      setExito("Alumno agregado correctamente.");
+    } catch (err) {
+      console.error("Error al crear alumno:", err);
+    } finally {
+      setGuardandoNuevo(false);
+    }
+  };
+
+  const materiasFiltradasNuevas = todasMateriasTmp.filter((m) =>
+    m.nombre.toLowerCase().includes(busquedaMateriaNueva.toLowerCase())
+  );
+
+  const existeMateriaNueva = todasMateriasTmp.some(
+    (m) => m.nombre.toLowerCase() === busquedaMateriaNueva.trim().toLowerCase()
+  );
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900">
-          <KeyRound className="h-5 w-5 text-gray-400" />
-          Credenciales de alumnos
-        </h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Cuentas de acceso registradas para el ciclo escolar en curso. Informacion de uso interno.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900">
+            <KeyRound className="h-5 w-5 text-gray-400" />
+            Credenciales de alumnos
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Cuentas de acceso registradas para el ciclo escolar en curso. Informacion de uso interno.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={abrirAgregar}
+          className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+        >
+          <UserPlus className="h-4 w-4" />
+          Agregar alumno
+        </button>
       </div>
       <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
         <table className="w-full border-collapse text-sm">
@@ -590,6 +677,137 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                 className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
               >
                 {guardandoMaterias ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {agregando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Agregar nuevo alumno</h3>
+              <button
+                type="button"
+                onClick={cerrarAgregar}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Nombre</label>
+                <input
+                  type="text"
+                  value={formNuevoAlumno.nombre}
+                  onChange={(e) => setFormNuevoAlumno({ ...formNuevoAlumno, nombre: e.target.value })}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  placeholder="Nombre completo"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Cuenta</label>
+                <input
+                  type="text"
+                  value={formNuevoAlumno.cuenta}
+                  onChange={(e) => setFormNuevoAlumno({ ...formNuevoAlumno, cuenta: e.target.value })}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  placeholder="Usuario de acceso"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Contrasena</label>
+                <input
+                  type="text"
+                  value={formNuevoAlumno.contrasena}
+                  onChange={(e) => setFormNuevoAlumno({ ...formNuevoAlumno, contrasena: e.target.value })}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  placeholder="Contrasena de acceso"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <label className="mb-2 block text-sm font-medium text-gray-700">Materias (opcional)</label>
+              <div className="relative mb-3">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar materia..."
+                  value={busquedaMateriaNueva}
+                  onChange={(e) => setBusquedaMateriaNueva(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              {busquedaMateriaNueva.trim() && !existeMateriaNueva && (
+                <button
+                  type="button"
+                  onClick={crearMateriaNueva}
+                  className="mb-3 w-full rounded-xl border border-dashed border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                >
+                  + Crear materia "{busquedaMateriaNueva.trim()}" y asignarla
+                </button>
+              )}
+
+              <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
+                {materiasFiltradasNuevas.length === 0 ? (
+                  <p className="text-sm text-gray-400">
+                    {busquedaMateriaNueva ? "No se encontraron materias." : "No hay materias disponibles."}
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {materiasFiltradasNuevas.map((m) => (
+                      <label
+                        key={m.id_materia}
+                        className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                          materiasNuevas.includes(m.id_materia)
+                            ? "bg-blue-50 text-blue-900"
+                            : "text-gray-700 hover:bg-gray-100"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={materiasNuevas.includes(m.id_materia)}
+                          onChange={() => toggleMateriaNueva(m.id_materia)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        {m.nombre}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {materiasNuevas.length > 0 && (
+                <p className="mt-2 text-xs text-gray-400">
+                  {materiasNuevas.length} materia(s) seleccionada(s)
+                </p>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={cerrarAgregar}
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={guardarNuevoAlumno}
+                disabled={guardandoNuevo}
+                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {guardandoNuevo ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Save className="h-4 w-4" />

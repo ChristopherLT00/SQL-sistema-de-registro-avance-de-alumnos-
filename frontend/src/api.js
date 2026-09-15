@@ -52,6 +52,19 @@ export async function fetchAlumnos() {
   return res.json();
 }
 
+export async function createAlumno({ nombre, cuenta, contrasena }) {
+  const res = await fetch(`${API}/alumnos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ nombre, cuenta, contrasena }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al crear alumno");
+  }
+  return res.json();
+}
+
 /* ------------------------------------------------------------------ */
 /*  Materias                                                           */
 /* ------------------------------------------------------------------ */

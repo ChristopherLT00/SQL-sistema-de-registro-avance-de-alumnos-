@@ -69,6 +69,26 @@ app.get("/api/alumnos", async (req, res) => {
   }
 });
 
+app.post("/api/alumnos", async (req, res) => {
+  try {
+    const { nombre, cuenta, contrasena } = req.body;
+    if (!nombre || !cuenta || !contrasena) {
+      return res.status(400).json({ error: "Nombre, cuenta y contrasena son requeridos" });
+    }
+    const existe = await pool.query("SELECT id_alumno FROM alumnos WHERE cuenta = $1", [cuenta]);
+    if (existe.rowCount > 0) {
+      return res.status(400).json({ error: "Ya existe un alumno con esa cuenta" });
+    }
+    const result = await pool.query(
+      "INSERT INTO alumnos (nombre, cuenta, contrasena) VALUES ($1, $2, $3) RETURNING *",
+      [nombre, cuenta, contrasena]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.put("/api/alumnos/:id", async (req, res) => {
   try {
     const { id } = req.params;
