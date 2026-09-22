@@ -314,6 +314,48 @@ app.delete("/api/progreso/:id", async (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Horario                                                            */
+/* ------------------------------------------------------------------ */
+
+app.get("/api/horario", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT grid FROM horario ORDER BY id LIMIT 1");
+    if (result.rowCount === 0) {
+      return res.json({
+        grid: [
+          ["Plataforma", "Plataforma", "Plataforma", "Plataforma", "AUSENTE"],
+          ["Plataforma", "Plataforma", "Plataforma", "Biología", "AUSENTE"],
+          ["Plataforma", "Plataforma", "Biología", "Taller optativo", "AUSENTE"],
+          ["Taller optativo - Música", "Taller optativo - Música", "Música ensamble", "Taller optativo", "AUSENTE"],
+          ["Plataforma", "Pintura", "Pintura", "Plataforma", "AUSENTE"],
+        ],
+      });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/horario", async (req, res) => {
+  try {
+    const { grid } = req.body;
+    if (!Array.isArray(grid)) {
+      return res.status(400).json({ error: "grid inválido" });
+    }
+    await pool.query(
+      `INSERT INTO horario (id, grid, actualizado_en)
+       VALUES (1, $1, now())
+       ON CONFLICT (id) DO UPDATE SET grid = $1, actualizado_en = now()`,
+      [JSON.stringify({ grid })]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /*  Servir frontend en produccion                                      */
 /* ------------------------------------------------------------------ */
 

@@ -1450,7 +1450,8 @@ function NotificacionCambioClase({ notificacion, onCerrar }) {
 }
 
 function VistaHorario() {
-  const [horario, setHorario] = useState(cargarHorario);
+  const [horario, setHorario] = useState(HORARIO_DEFAULT);
+  const [cargandoHorario, setCargandoHorario] = useState(true);
   const [editando, setEditando] = useState(false);
   const [celdaEditando, setCeldaEditando] = useState(null);
   const [valorCelda, setValorCelda] = useState("");
@@ -1459,6 +1460,13 @@ function VistaHorario() {
   const [notificacion, setNotificacion] = useState(null);
   const prevMateriaRef = { current: null };
   const notifActivaRef = { current: false };
+
+  useEffect(() => {
+    cargarHorario().then((data) => {
+      setHorario(data);
+      setCargandoHorario(false);
+    });
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => setAhora(new Date()), 1000);
@@ -1518,15 +1526,15 @@ function VistaHorario() {
     setValorCelda("");
   };
 
-  const guardar = () => {
-    guardarHorario(horario);
+  const guardar = async () => {
+    await guardarHorario(horario);
     setEditando(false);
     setCeldaEditando(null);
     setExito("Horario guardado correctamente.");
   };
 
-  const restaurar = () => {
-    const def = restaurarHorario();
+  const restaurar = async () => {
+    const def = await restaurarHorario();
     setHorario(def);
     setCeldaEditando(null);
     setExito("Horario restaurado al original.");
@@ -1559,6 +1567,14 @@ function VistaHorario() {
           ? `Mañana ${DIAS[estado.siguienteDia]} · ${horario.grid[0]?.[estado.siguienteDia] || "—"}`
           : diaNombre;
 
+  if (cargandoHorario) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -1567,7 +1583,7 @@ function VistaHorario() {
           Horario escolar
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Horario semanal del ciclo escolar en curso. Los cambios se guardan localmente en este dispositivo.
+          Horario semanal del ciclo escolar en curso. Los cambios se sincronizan con todos los dispositivos.
         </p>
       </div>
 

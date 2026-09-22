@@ -106,6 +106,26 @@ export async function syncInscripciones(idAlumno, materiasIds) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Horario                                                            */
+/* ------------------------------------------------------------------ */
+
+export async function fetchHorario() {
+  const res = await fetch(`${API}/horario`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Error al obtener horario");
+  return res.json();
+}
+
+export async function saveHorario(grid) {
+  const res = await fetch(`${API}/horario`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ grid }),
+  });
+  if (!res.ok) throw new Error("Error al guardar horario");
+  return res.json();
+}
+
+/* ------------------------------------------------------------------ */
 /*  Progreso                                                           */
 /* ------------------------------------------------------------------ */
 

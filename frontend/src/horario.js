@@ -1,4 +1,4 @@
-const CLAVE = "magnolias_horario";
+import { fetchHorario, saveHorario } from "./api";
 
 export const DIAS = ["LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES"];
 
@@ -20,23 +20,22 @@ export const HORARIO_DEFAULT = {
   ],
 };
 
-export function cargarHorario() {
+export async function cargarHorario() {
   try {
-    const raw = localStorage.getItem(CLAVE);
-    if (!raw) return structuredClone(HORARIO_DEFAULT);
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data.grid)) return structuredClone(HORARIO_DEFAULT);
-    return data;
+    const data = await fetchHorario();
+    if (!data || !Array.isArray(data.grid)) return structuredClone(HORARIO_DEFAULT);
+    return { grid: data.grid };
   } catch {
     return structuredClone(HORARIO_DEFAULT);
   }
 }
 
-export function guardarHorario(datos) {
-  localStorage.setItem(CLAVE, JSON.stringify(datos));
+export async function guardarHorario(datos) {
+  await saveHorario(datos.grid);
 }
 
-export function restaurarHorario() {
-  localStorage.removeItem(CLAVE);
-  return structuredClone(HORARIO_DEFAULT);
+export async function restaurarHorario() {
+  const def = structuredClone(HORARIO_DEFAULT);
+  await saveHorario(def.grid);
+  return def;
 }
