@@ -1033,6 +1033,8 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
   const [alumnoId, setAlumnoId] = useState("");
   const [filtro, setFiltro] = useState("todos");
   const [hitoSeleccionado, setHitoSeleccionado] = useState("todos");
+  const [hitoDesde, setHitoDesde] = useState(HITOS[0]);
+  const [hitoHasta, setHitoHasta] = useState(HITOS[HITOS.length - 1]);
 
   const datos = useMemo(() => {
     if (!alumnoId) return [];
@@ -1052,7 +1054,15 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
 
   const filtrarHitos = (hitos) => {
     let resultado = hitos;
-    if (hitoSeleccionado !== "todos") {
+    if (hitoSeleccionado === "rango") {
+      const iDesde = HITOS.indexOf(hitoDesde);
+      const iHasta = HITOS.indexOf(hitoHasta);
+      const [lo, hi] = iDesde <= iHasta ? [iDesde, iHasta] : [iHasta, iDesde];
+      resultado = resultado.filter((h) => {
+        const i = HITOS.indexOf(h.hito);
+        return i >= lo && i <= hi;
+      });
+    } else if (hitoSeleccionado !== "todos") {
       resultado = resultado.filter((h) => h.hito === hitoSeleccionado);
     }
     if (filtro === "entregados") resultado = resultado.filter((h) => h.cumplio);
@@ -1070,12 +1080,12 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
 
   const descargarPDF = () => {
     if (!alumnoId || datos.length === 0) return;
-    generarPDFAvance({ alumnoNombre, datos, filtro, hitoSeleccionado });
+    generarPDFAvance({ alumnoNombre, datos, filtro, hitoSeleccionado, hitoDesde, hitoHasta });
   };
 
   const descargarExcel = () => {
     if (!alumnoId || datos.length === 0) return;
-    generarExcelAvance({ alumnoNombre, datos, filtro, hitoSeleccionado });
+    generarExcelAvance({ alumnoNombre, datos, filtro, hitoSeleccionado, hitoDesde, hitoHasta });
   };
 
   return (
@@ -1110,12 +1120,42 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
           className="rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
         >
           <option value="todos">Todos los hitos</option>
+          <option value="rango">Rango de hitos</option>
           {HITOS.map((h) => (
             <option key={h} value={h}>
               Hito {h}
             </option>
           ))}
         </select>
+
+        {hitoSeleccionado === "rango" && (
+          <>
+            <select
+              value={hitoDesde}
+              onChange={(e) => setHitoDesde(e.target.value)}
+              className="rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="" disabled>Desde</option>
+              {HITOS.map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </select>
+            <select
+              value={hitoHasta}
+              onChange={(e) => setHitoHasta(e.target.value)}
+              className="rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="" disabled>Hasta</option>
+              {HITOS.map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
 
         <div className="inline-flex items-center rounded-full bg-gray-100 p-1">
           {opciones.map((o) => (

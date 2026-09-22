@@ -1,20 +1,38 @@
 import * as XLSX from "xlsx";
 
+const HITOS = [
+  "1", "2", "3", "4", "Int 1", "Parcial 1",
+  "6", "7", "8", "9", "Int 2", "Parcial 2",
+  "11", "12", "13", "Int 3", "Final",
+];
+
+function filtrarHitosAvance(hitos, hitoSeleccionado, hitoDesde, hitoHasta, filtro) {
+  let resultado = hitos;
+  if (hitoSeleccionado === "rango") {
+    const iDesde = HITOS.indexOf(hitoDesde);
+    const iHasta = HITOS.indexOf(hitoHasta);
+    const [lo, hi] = iDesde <= iHasta ? [iDesde, iHasta] : [iHasta, iDesde];
+    resultado = resultado.filter((h) => {
+      const i = HITOS.indexOf(h.hito);
+      return i >= lo && i <= hi;
+    });
+  } else if (hitoSeleccionado !== "todos") {
+    resultado = resultado.filter((h) => h.hito === hitoSeleccionado);
+  }
+  if (filtro === "entregados") resultado = resultado.filter((h) => h.cumplio);
+  if (filtro === "pendientes") resultado = resultado.filter((h) => !h.cumplio);
+  return resultado;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Excel: Avance individual de un alumno                              */
 /* ------------------------------------------------------------------ */
 
-export function generarExcelAvance({ alumnoNombre, datos, filtro, hitoSeleccionado }) {
+export function generarExcelAvance({ alumnoNombre, datos, filtro, hitoSeleccionado, hitoDesde, hitoHasta }) {
   const wb = XLSX.utils.book_new();
 
   for (const { materia, hitos } of datos) {
-    let hitosFiltrados = hitos;
-
-    if (hitoSeleccionado !== "todos") {
-      hitosFiltrados = hitosFiltrados.filter((h) => h.hito === hitoSeleccionado);
-    }
-    if (filtro === "entregados") hitosFiltrados = hitosFiltrados.filter((h) => h.cumplio);
-    if (filtro === "pendientes") hitosFiltrados = hitosFiltrados.filter((h) => !h.cumplio);
+    const hitosFiltrados = filtrarHitosAvance(hitos, hitoSeleccionado, hitoDesde, hitoHasta, filtro);
 
     if (hitosFiltrados.length === 0) continue;
 
@@ -33,9 +51,13 @@ export function generarExcelAvance({ alumnoNombre, datos, filtro, hitoSelecciona
     XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
   }
 
+  const nombreRango =
+    hitoSeleccionado === "rango"
+      ? `${hitoDesde}_a_${hitoHasta}`.replace(/\s+/g, "_")
+      : hitoSeleccionado;
   XLSX.writeFile(
     wb,
-    `Avance_${alumnoNombre.replace(/\s+/g, "_")}_${hitoSeleccionado}_${filtro}.xlsx`
+    `Avance_${alumnoNombre.replace(/\s+/g, "_")}_${nombreRango}_${filtro}.xlsx`
   );
 }
 

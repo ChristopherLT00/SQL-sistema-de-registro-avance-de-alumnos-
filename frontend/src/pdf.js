@@ -2,6 +2,30 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import logoBase64 from "./logo-base64.js";
 
+const HITOS = [
+  "1", "2", "3", "4", "Int 1", "Parcial 1",
+  "6", "7", "8", "9", "Int 2", "Parcial 2",
+  "11", "12", "13", "Int 3", "Final",
+];
+
+function filtrarHitosAvance(hitos, hitoSeleccionado, hitoDesde, hitoHasta, filtro) {
+  let resultado = hitos;
+  if (hitoSeleccionado === "rango") {
+    const iDesde = HITOS.indexOf(hitoDesde);
+    const iHasta = HITOS.indexOf(hitoHasta);
+    const [lo, hi] = iDesde <= iHasta ? [iDesde, iHasta] : [iHasta, iDesde];
+    resultado = resultado.filter((h) => {
+      const i = HITOS.indexOf(h.hito);
+      return i >= lo && i <= hi;
+    });
+  } else if (hitoSeleccionado !== "todos") {
+    resultado = resultado.filter((h) => h.hito === hitoSeleccionado);
+  }
+  if (filtro === "entregados") resultado = resultado.filter((h) => h.cumplio);
+  if (filtro === "pendientes") resultado = resultado.filter((h) => !h.cumplio);
+  return resultado;
+}
+
 function fechaStr() {
   return new Date().toLocaleDateString("es-MX", {
     day: "numeric",
@@ -18,12 +42,17 @@ function agregarLogo(doc) {
 /*  PDF: Avance individual de un alumno                                */
 /* ------------------------------------------------------------------ */
 
-export function generarPDFAvance({ alumnoNombre, datos, filtro, hitoSeleccionado }) {
+export function generarPDFAvance({ alumnoNombre, datos, filtro, hitoSeleccionado, hitoDesde, hitoHasta }) {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
   agregarLogo(doc);
 
-  const filtroHitoTexto = hitoSeleccionado === "todos" ? "Todos" : `Hito ${hitoSeleccionado}`;
+  const filtroHitoTexto =
+    hitoSeleccionado === "todos"
+      ? "Todos"
+      : hitoSeleccionado === "rango"
+        ? `Rango: ${hitoDesde} – ${hitoHasta}`
+        : `Hito ${hitoSeleccionado}`;
   const filtroEstadoTexto = filtro === "todos" ? "Todos" : filtro === "entregados" ? "Entregados" : "Pendientes";
 
   doc.setFontSize(16);
@@ -37,13 +66,7 @@ export function generarPDFAvance({ alumnoNombre, datos, filtro, hitoSeleccionado
   let y = 48;
 
   for (const { materia, hitos } of datos) {
-    let hitosFiltrados = hitos;
-
-    if (hitoSeleccionado !== "todos") {
-      hitosFiltrados = hitosFiltrados.filter((h) => h.hito === hitoSeleccionado);
-    }
-    if (filtro === "entregados") hitosFiltrados = hitosFiltrados.filter((h) => h.cumplio);
-    if (filtro === "pendientes") hitosFiltrados = hitosFiltrados.filter((h) => !h.cumplio);
+    const hitosFiltrados = filtrarHitosAvance(hitos, hitoSeleccionado, hitoDesde, hitoHasta, filtro);
 
     if (hitosFiltrados.length === 0) continue;
 
@@ -80,7 +103,11 @@ export function generarPDFAvance({ alumnoNombre, datos, filtro, hitoSeleccionado
     y = doc.lastAutoTable.finalY + 8;
   }
 
-  doc.save(`Avance_${alumnoNombre.replace(/\s+/g, "_")}_${hitoSeleccionado}_${filtro}.pdf`);
+  const nombreRango =
+    hitoSeleccionado === "rango"
+      ? `${hitoDesde}_a_${hitoHasta}`.replace(/\s+/g, "_")
+      : hitoSeleccionado;
+  doc.save(`Avance_${alumnoNombre.replace(/\s+/g, "_")}_${nombreRango}_${filtro}.pdf`);
 }
 
 /* ------------------------------------------------------------------ */
