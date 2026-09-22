@@ -331,7 +331,7 @@ app.get("/api/horario", async (req, res) => {
         ],
       });
     }
-    res.json(result.rows[0]);
+    res.json(result.rows[0].grid);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
