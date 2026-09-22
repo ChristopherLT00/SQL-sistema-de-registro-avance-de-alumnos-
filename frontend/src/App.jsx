@@ -1354,7 +1354,7 @@ function colorParaMateria(nombre) {
   return PALETA_FALLA[Math.abs(hash) % PALETA_FALLA.length];
 }
 
-const IDX_DIA_POR_DEFECTO = { Sunday: -1, Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3, Friday: 4, Saturday: -1 };
+const IDX_DIA_POR_DEFECTO = [-1, 0, 1, 2, 3, 4, -1];
 
 function minutoAHora(min) {
   const h = Math.floor(min / 60);
