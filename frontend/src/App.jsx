@@ -19,6 +19,8 @@ import {
   Save,
   LogOut,
   UserPlus,
+  Calendar,
+  RotateCcw,
 } from "lucide-react";
 import {
   fetchAlumnos,
@@ -38,6 +40,13 @@ import {
 } from "./api";
 import { generarPDFAvance, generarPDFMatriz } from "./pdf";
 import { generarExcelAvance, generarExcelMatriz } from "./excel";
+import {
+  DIAS,
+  BLOQUES,
+  cargarHorario,
+  guardarHorario,
+  restaurarHorario,
+} from "./horario";
 
 /* ------------------------------------------------------------------ */
 /*  Catalogos (definidos en frontend, no en la DB)                     */
@@ -54,6 +63,7 @@ const VISTAS = [
   { id: "registro", nombre: "Registro semanal", icon: ClipboardList },
   { id: "avance", nombre: "Avance individual", icon: UserSearch },
   { id: "matriz", nombre: "Matriz general", icon: Table2 },
+  { id: "horario", nombre: "Horario escolar", icon: Calendar },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -1310,6 +1320,400 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Vista 5: Horario escolar                                           */
+/* ------------------------------------------------------------------ */
+
+const IDX_DIA_POR_DEFECTO = { Sunday: -1, Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3, Friday: 4, Saturday: -1 };
+
+function minutoAHora(min) {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function horaAMinuto(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function obtenerEstadoActual() {
+  const ahora = new Date();
+  const diaIdx = IDX_DIA_POR_DEFECTO[ahora.getDay()];
+  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+
+  if (diaIdx < 0) {
+    return { tipo: "finde", diaIdx: -1, bloqueIdx: -1, minutosAhora };
+  }
+
+  for (let i = 0; i < BLOQUES.length; i++) {
+    const ini = horaAMinuto(BLOQUES[i].inicio);
+    const fin = horaAMinuto(BLOQUES[i].fin);
+    if (minutosAhora >= ini && minutosAhora < fin) {
+      return { tipo: "enClase", diaIdx, bloqueIdx: i, minutosAhora, minutosRestantes: fin - minutosAhora, minutosTotales: fin - ini };
+    }
+  }
+
+  let siguiente = -1;
+  for (let i = 0; i < BLOQUES.length; i++) {
+    if (horaAMinuto(BLOQUES[i].inicio) > minutosAhora) {
+      siguiente = i;
+      break;
+    }
+  }
+  if (siguiente >= 0) {
+    return { tipo: "espera", diaIdx, bloqueIdx: siguiente, minutosAhora, minutosParaSiguiente: horaAMinuto(BLOQUES[siguiente].inicio) - minutosAhora };
+  }
+
+  const manana = diaIdx + 1 <= 4 ? diaIdx + 1 : -1;
+  if (manana >= 0) {
+    const hastaManana = 24 * 60 - minutosAhora + horaAMinuto(BLOQUES[0].inicio);
+    return { tipo: "terminado", diaIdx, bloqueIdx: -1, minutosAhora, siguienteDia: manana, minutosParaSiguiente: hastaManana };
+  }
+  return { tipo: "finde", diaIdx, bloqueIdx: -1, minutosAhora };
+}
+
+function NotificacionCambioClase({ notificacion, onCerrar }) {
+  const [animState, setAnimState] = useState("entering");
+
+  useEffect(() => {
+    if (!notificacion) {
+      setAnimState("entering");
+      return;
+    }
+    setAnimState("entering");
+    const t1 = setTimeout(() => setAnimState("visible"), 50);
+    return () => clearTimeout(t1);
+  }, [notificacion]);
+
+  useEffect(() => {
+    if (!notificacion || animState !== "visible") return;
+    const t = setTimeout(() => {
+      setAnimState("exiting");
+      setTimeout(onCerrar, 350);
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [notificacion, animState, onCerrar]);
+
+  if (!notificacion && animState !== "exiting") return null;
+
+  return (
+    <div className={`fixed left-1/2 top-4 z-[60] -translate-x-1/2 ${animState === "entering" ? "notify-enter" : animState === "exiting" ? "notify-exit" : ""}`}>
+      <div className="flex items-center gap-3.5 rounded-[20px] border border-white/40 bg-white/70 px-5 py-3.5 shadow-[0_8px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
+          <Calendar className="h-5 w-5 text-blue-600" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+            Horario escolar
+          </p>
+          <p className="text-sm font-semibold text-gray-900">
+            {notificacion?.titulo}
+          </p>
+          <p className="text-xs text-gray-500">
+            {notificacion?.mensaje}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VistaHorario() {
+  const [horario, setHorario] = useState(cargarHorario);
+  const [editando, setEditando] = useState(false);
+  const [celdaEditando, setCeldaEditando] = useState(null);
+  const [valorCelda, setValorCelda] = useState("");
+  const [exito, setExito] = useState(null);
+  const [ahora, setAhora] = useState(() => new Date());
+  const [notificacion, setNotificacion] = useState(null);
+  const prevMateriaRef = { current: null };
+  const notifActivaRef = { current: false };
+
+  useEffect(() => {
+    const t = setInterval(() => setAhora(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const estado = useMemo(() => obtenerEstadoActual(), [ahora]);
+
+  const materiaActual =
+    estado.diaIdx >= 0 && estado.bloqueIdx >= 0
+      ? horario.grid[estado.bloqueIdx]?.[estado.diaIdx] || ""
+      : "";
+
+  const claveMateria = `${ahora.getDay()}-${estado.bloqueIdx}-${materiaActual}`;
+
+  useEffect(() => {
+    if (prevMateriaRef.current === null) {
+      prevMateriaRef.current = claveMateria;
+      return;
+    }
+    if (prevMateriaRef.current !== claveMateria && materiaActual && !notifActivaRef.current) {
+      prevMateriaRef.current = claveMateria;
+      notifActivaRef.current = true;
+      const diaNombre = estado.diaIdx >= 0 ? DIAS[estado.diaIdx] : "";
+      const bloque = estado.bloqueIdx >= 0 ? BLOQUES[estado.bloqueIdx] : null;
+      setNotificacion({
+        titulo: materiaActual,
+        mensaje: bloque ? `${diaNombre} · ${bloque.inicio} – ${bloque.fin}` : diaNombre,
+      });
+    } else if (prevMateriaRef.current !== claveMateria) {
+      prevMateriaRef.current = claveMateria;
+    }
+  }, [claveMateria, materiaActual, estado.diaIdx, estado.bloqueIdx]);
+
+  const cerrarNotificacion = useCallback(() => {
+    setNotificacion(null);
+    notifActivaRef.current = false;
+  }, []);
+
+  const iniciarEdicion = (bloqueIdx, diaIdx) => {
+    if (!editando) return;
+    setCeldaEditando({ bloqueIdx, diaIdx });
+    setValorCelda(horario.grid[bloqueIdx]?.[diaIdx] || "");
+  };
+
+  const confirmarCelda = () => {
+    if (celdaEditando) {
+      const nuevoGrid = horario.grid.map((fila) => [...fila]);
+      nuevoGrid[celdaEditando.bloqueIdx][celdaEditando.diaIdx] = valorCelda;
+      setHorario({ ...horario, grid: nuevoGrid });
+      setCeldaEditando(null);
+    }
+  };
+
+  const cancelarCelda = () => {
+    setCeldaEditando(null);
+    setValorCelda("");
+  };
+
+  const guardar = () => {
+    guardarHorario(horario);
+    setEditando(false);
+    setCeldaEditando(null);
+    setExito("Horario guardado correctamente.");
+  };
+
+  const restaurar = () => {
+    const def = restaurarHorario();
+    setHorario(def);
+    setCeldaEditando(null);
+    setExito("Horario restaurado al original.");
+  };
+
+  const progresoPct =
+    estado.tipo === "enClase"
+      ? Math.round(((estado.minutosTotales - estado.minutosRestantes) / estado.minutosTotales) * 100)
+      : 0;
+
+  const reloj = ahora.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  const diaNombre = estado.diaIdx >= 0 ? DIAS[estado.diaIdx] : "FIN DE SEMANA";
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900">
+          <Calendar className="h-5 w-5 text-gray-400" />
+          Horario escolar
+        </h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Horario semanal del ciclo escolar en curso. Los cambios se guardan localmente en este dispositivo.
+        </p>
+      </div>
+
+      {/* Card: en curso ahora */}
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-6 py-5 text-white">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-gray-400">En curso ahora</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight">
+                {estado.tipo === "enClase"
+                  ? materiaActual || "—"
+                  : estado.tipo === "espera"
+                    ? "Receso"
+                    : estado.tipo === "terminado"
+                      ? "Jornada terminada"
+                      : "Fin de semana"}
+              </p>
+              <p className="mt-1 text-sm text-gray-400">
+                {estado.diaIdx >= 0 && estado.bloqueIdx >= 0
+                  ? `${DIAS[estado.diaIdx]} · ${BLOQUES[estado.bloqueIdx].inicio} – ${BLOQUES[estado.bloqueIdx].fin}`
+                  : diaNombre}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-3xl font-bold tabular-nums tracking-tight">{reloj}</p>
+              <p className="text-xs text-gray-400">{diaNombre}</p>
+            </div>
+          </div>
+
+          {estado.tipo === "enClase" && (
+            <div className="mt-5">
+              <div className="flex items-center justify-between text-xs text-gray-400 mb-1.5">
+                <span>Progreso de la clase</span>
+                <span>{estado.minutosRestantes} min restantes</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-500 transition-all duration-1000"
+                  style={{ width: `${progresoPct}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {estado.tipo === "espera" && (
+            <div className="mt-4 text-sm text-gray-400">
+              Siguiente clase en{" "}
+              <span className="font-semibold text-white">
+                {estado.minutosParaSiguiente} min
+              </span>
+              {" — "}
+              {horario.grid[estado.bloqueIdx]?.[estado.diaIdx] || "—"}
+            </div>
+          )}
+
+          {estado.tipo === "terminado" && (
+            <div className="mt-4 text-sm text-gray-400">
+              Mañana:{" "}
+              <span className="font-semibold text-white">
+                {DIAS[estado.siguienteDia]} · {horario.grid[0]?.[estado.siguienteDia] || "—"}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Grid del horario */}
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <p className="text-sm font-medium text-gray-700">Vista semanal</p>
+          <div className="flex gap-2">
+            {editando ? (
+              <>
+                <button
+                  type="button"
+                  onClick={restaurar}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Restaurar
+                </button>
+                <button
+                  type="button"
+                  onClick={guardar}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Guardar
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditando(true)}
+                className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-4 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Editar
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50 text-left text-gray-500">
+                <th className="px-5 py-3 text-xs font-medium uppercase tracking-wide">Hora</th>
+                {DIAS.map((d) => (
+                  <th
+                    key={d}
+                    className={`px-5 py-3 text-xs font-medium uppercase tracking-wide ${
+                      estado.diaIdx === DIAS.indexOf(d) ? "bg-blue-50 text-blue-700" : ""
+                    }`}
+                  >
+                    {d}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {BLOQUES.map((bloque, bIdx) => (
+                <tr
+                  key={bloque.inicio}
+                  className={bIdx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}
+                >
+                  <td className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-gray-500">
+                    {bloque.inicio} – {bloque.fin}
+                  </td>
+                  {DIAS.map((d, dIdx) => {
+                    const esActual = estado.tipo === "enClase" && estado.bloqueIdx === bIdx && estado.diaIdx === dIdx;
+                    const valor = horario.grid[bIdx]?.[dIdx] || "";
+                    const esAusente = valor === "AUSENTE";
+                    const editandoEsta = celdaEditando?.bloqueIdx === bIdx && celdaEditando?.diaIdx === dIdx;
+
+                    return (
+                      <td
+                        key={d}
+                        onClick={() => iniciarEdicion(bIdx, dIdx)}
+                        className={`px-5 py-3.5 text-sm ${
+                          editando ? "cursor-pointer hover:bg-blue-50" : ""
+                        } ${esActual ? "bg-blue-50/60 ring-1 ring-inset ring-blue-200" : ""}`}
+                      >
+                        {editandoEsta ? (
+                          <input
+                            type="text"
+                            value={valorCelda}
+                            onChange={(e) => setValorCelda(e.target.value)}
+                            onBlur={confirmarCelda}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") confirmarCelda();
+                              if (e.key === "Escape") cancelarCelda();
+                            }}
+                            autoFocus
+                            className="w-full rounded-lg border border-blue-300 bg-white px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          />
+                        ) : (
+                          <span
+                            className={
+                              esAusente
+                                ? "text-gray-300"
+                                : esActual
+                                  ? "font-medium text-gray-900"
+                                  : "text-gray-600"
+                            }
+                          >
+                            {valor || "—"}
+                            {esActual && (
+                              <span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-blue-500 align-middle animate-pulse" />
+                            )}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {editando && (
+          <div className="border-t border-gray-100 px-6 py-3 text-xs text-gray-400">
+            Haz clic en cualquier celda para editar el nombre de la materia. Enter para confirmar, Esc para cancelar.
+          </div>
+        )}
+      </div>
+
+      <Toast mensaje={exito} onclose={() => setExito(null)} />
+      <NotificacionCambioClase notificacion={notificacion} onCerrar={cerrarNotificacion} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Aplicacion principal                                                */
 /* ------------------------------------------------------------------ */
 
@@ -1473,6 +1877,8 @@ export default function App() {
               inscripciones={inscripciones}
               progreso={progreso}
             />
+          ) : vista === "horario" ? (
+            <VistaHorario />
           ) : (
             <VistaMatriz
               alumnos={alumnos}
