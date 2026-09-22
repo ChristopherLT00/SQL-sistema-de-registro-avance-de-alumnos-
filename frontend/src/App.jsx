@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import {
   Users,
   ClipboardList,
@@ -43,6 +43,7 @@ import { generarExcelAvance, generarExcelMatriz } from "./excel";
 import {
   DIAS,
   BLOQUES,
+  HORARIO_DEFAULT,
   cargarHorario,
   guardarHorario,
   restaurarHorario,
@@ -1458,8 +1459,8 @@ function VistaHorario() {
   const [exito, setExito] = useState(null);
   const [ahora, setAhora] = useState(() => new Date());
   const [notificacion, setNotificacion] = useState(null);
-  const prevMateriaRef = { current: null };
-  const notifActivaRef = { current: false };
+  const prevMateriaRef = useRef(null);
+  const notifActivaRef = useRef(false);
 
   useEffect(() => {
     cargarHorario().then((data) => {
