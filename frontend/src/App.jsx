@@ -21,6 +21,7 @@ import {
   UserPlus,
   Calendar,
   RotateCcw,
+  Bell,
 } from "lucide-react";
 import {
   fetchAlumnos,
@@ -47,6 +48,8 @@ import {
   cargarHorario,
   guardarHorario,
   restaurarHorario,
+  obtenerEstadoActual,
+  obtenerMateriaActual,
 } from "./horario";
 
 /* ------------------------------------------------------------------ */
@@ -1355,55 +1358,6 @@ function colorParaMateria(nombre) {
   return PALETA_FALLA[Math.abs(hash) % PALETA_FALLA.length];
 }
 
-const IDX_DIA_POR_DEFECTO = [-1, 0, 1, 2, 3, 4, -1];
-
-function minutoAHora(min) {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-function horaAMinuto(hhmm) {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function obtenerEstadoActual() {
-  const ahora = new Date();
-  const diaIdx = IDX_DIA_POR_DEFECTO[ahora.getDay()];
-  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
-
-  if (diaIdx < 0) {
-    return { tipo: "finde", diaIdx: -1, bloqueIdx: -1, minutosAhora };
-  }
-
-  for (let i = 0; i < BLOQUES.length; i++) {
-    const ini = horaAMinuto(BLOQUES[i].inicio);
-    const fin = horaAMinuto(BLOQUES[i].fin);
-    if (minutosAhora >= ini && minutosAhora < fin) {
-      return { tipo: "enClase", diaIdx, bloqueIdx: i, minutosAhora, minutosRestantes: fin - minutosAhora, minutosTotales: fin - ini };
-    }
-  }
-
-  let siguiente = -1;
-  for (let i = 0; i < BLOQUES.length; i++) {
-    if (horaAMinuto(BLOQUES[i].inicio) > minutosAhora) {
-      siguiente = i;
-      break;
-    }
-  }
-  if (siguiente >= 0) {
-    return { tipo: "espera", diaIdx, bloqueIdx: siguiente, minutosAhora, minutosParaSiguiente: horaAMinuto(BLOQUES[siguiente].inicio) - minutosAhora };
-  }
-
-  const manana = diaIdx + 1 <= 4 ? diaIdx + 1 : -1;
-  if (manana >= 0) {
-    const hastaManana = 24 * 60 - minutosAhora + horaAMinuto(BLOQUES[0].inicio);
-    return { tipo: "terminado", diaIdx, bloqueIdx: -1, minutosAhora, siguienteDia: manana, minutosParaSiguiente: hastaManana };
-  }
-  return { tipo: "finde", diaIdx, bloqueIdx: -1, minutosAhora };
-}
-
 function NotificacionCambioClase({ notificacion, onCerrar }) {
   const [animState, setAnimState] = useState("entering");
 
@@ -1458,9 +1412,9 @@ function VistaHorario() {
   const [valorCelda, setValorCelda] = useState("");
   const [exito, setExito] = useState(null);
   const [ahora, setAhora] = useState(() => new Date());
-  const [notificacion, setNotificacion] = useState(null);
-  const prevMateriaRef = useRef(null);
-  const notifActivaRef = useRef(false);
+  const [permisoNotif, setPermisoNotif] = useState(
+    typeof Notification !== "undefined" ? Notification.permission : "denied"
+  );
 
   useEffect(() => {
     cargarHorario().then((data) => {
@@ -1476,36 +1430,13 @@ function VistaHorario() {
 
   const estado = useMemo(() => obtenerEstadoActual(), [ahora]);
 
-  const materiaActual =
-    estado.diaIdx >= 0 && estado.bloqueIdx >= 0
-      ? horario.grid[estado.bloqueIdx]?.[estado.diaIdx] || ""
-      : "";
+  const materiaActual = obtenerMateriaActual(horario, estado);
 
-  const claveMateria = `${ahora.getDay()}-${estado.bloqueIdx}-${materiaActual}`;
-
-  useEffect(() => {
-    if (prevMateriaRef.current === null) {
-      prevMateriaRef.current = claveMateria;
-      return;
-    }
-    if (prevMateriaRef.current !== claveMateria && materiaActual && !notifActivaRef.current) {
-      prevMateriaRef.current = claveMateria;
-      notifActivaRef.current = true;
-      const diaNombre = estado.diaIdx >= 0 ? DIAS[estado.diaIdx] : "";
-      const bloque = estado.bloqueIdx >= 0 ? BLOQUES[estado.bloqueIdx] : null;
-      setNotificacion({
-        titulo: materiaActual,
-        mensaje: bloque ? `${diaNombre} · ${bloque.inicio} – ${bloque.fin}` : diaNombre,
-      });
-    } else if (prevMateriaRef.current !== claveMateria) {
-      prevMateriaRef.current = claveMateria;
-    }
-  }, [claveMateria, materiaActual, estado.diaIdx, estado.bloqueIdx]);
-
-  const cerrarNotificacion = useCallback(() => {
-    setNotificacion(null);
-    notifActivaRef.current = false;
-  }, []);
+  const pedirPermisoNotif = async () => {
+    if (typeof Notification === "undefined") return;
+    const perm = await Notification.requestPermission();
+    setPermisoNotif(perm);
+  };
 
   const iniciarEdicion = (bloqueIdx, diaIdx) => {
     if (!editando) return;
@@ -1578,14 +1509,38 @@ function VistaHorario() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900">
-          <Calendar className="h-5 w-5 text-gray-400" />
-          Horario escolar
-        </h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Horario semanal del ciclo escolar en curso. Los cambios se sincronizan con todos los dispositivos.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900">
+            <Calendar className="h-5 w-5 text-gray-400" />
+            Horario escolar
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Horario semanal del ciclo escolar en curso. Los cambios se sincronizan con todos los dispositivos.
+          </p>
+        </div>
+        {permisoNotif !== "granted" && permisoNotif !== "denied" && (
+          <button
+            type="button"
+            onClick={pedirPermisoNotif}
+            className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-200"
+          >
+            <Bell className="h-3.5 w-3.5" />
+            Activar notificaciones
+          </button>
+        )}
+        {permisoNotif === "granted" && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Notificaciones activas
+          </span>
+        )}
+        {permisoNotif === "denied" && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-400">
+            <Bell className="h-3.5 w-3.5" />
+            Notificaciones bloqueadas
+          </span>
+        )}
       </div>
 
       {/* Card: en curso ahora */}
@@ -1762,7 +1717,6 @@ function VistaHorario() {
       </div>
 
       <Toast mensaje={exito} onclose={() => setExito(null)} />
-      <NotificacionCambioClase notificacion={notificacion} onCerrar={cerrarNotificacion} />
     </div>
   );
 }
@@ -1779,6 +1733,68 @@ export default function App() {
   const [materias, setMaterias] = useState([]);
   const [inscripciones, setInscripciones] = useState([]);
   const [progreso, setProgreso] = useState([]);
+  const [notificacion, setNotificacion] = useState(null);
+  const prevMateriaRef = useRef(null);
+  const notifActivaRef = useRef(false);
+  const horarioRef = useRef(null);
+
+  const cerrarNotificacion = useCallback(() => {
+    setNotificacion(null);
+    notifActivaRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (!autenticado) return;
+    let cancelado = false;
+
+    cargarHorario().then((data) => {
+      if (!cancelado) horarioRef.current = data;
+    });
+
+    const detectar = () => {
+      const horario = horarioRef.current;
+      if (!horario) return;
+      const estado = obtenerEstadoActual();
+      const materia = obtenerMateriaActual(horario, estado);
+      const clave = `${new Date().getDay()}-${estado.bloqueIdx}-${materia}`;
+
+      if (prevMateriaRef.current === null) {
+        prevMateriaRef.current = clave;
+        return;
+      }
+      if (prevMateriaRef.current === clave) return;
+      prevMateriaRef.current = clave;
+      if (!materia || notifActivaRef.current) return;
+
+      notifActivaRef.current = true;
+      const diaNombre = estado.diaIdx >= 0 ? DIAS[estado.diaIdx] : "";
+      const bloque = estado.bloqueIdx >= 0 ? BLOQUES[estado.bloqueIdx] : null;
+      const mensaje = bloque ? `${diaNombre} · ${bloque.inicio} – ${bloque.fin}` : diaNombre;
+
+      setNotificacion({ titulo: materia, mensaje });
+
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        try {
+          new Notification("Horario escolar", {
+            body: `${materia} · ${mensaje}`,
+            icon: "/magnoliaslogo.jpeg",
+          });
+        } catch {}
+      }
+    };
+
+    const t = setInterval(detectar, 30000);
+    const detectarVisible = () => {
+      if (!document.hidden) detectar();
+    };
+    document.addEventListener("visibilitychange", detectarVisible);
+
+    return () => {
+      cancelado = true;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", detectarVisible);
+    };
+  }, [autenticado]);
 
   const cargarDatos = useCallback(async () => {
     try {
@@ -1943,6 +1959,8 @@ export default function App() {
           )}
         </main>
       </div>
+
+      <NotificacionCambioClase notificacion={notificacion} onCerrar={cerrarNotificacion} />
     </div>
   );
 }
