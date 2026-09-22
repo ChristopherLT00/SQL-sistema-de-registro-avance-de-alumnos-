@@ -1323,6 +1323,37 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso }) {
 /*  Vista 5: Horario escolar                                           */
 /* ------------------------------------------------------------------ */
 
+const COLORES_MATERIA = {
+  "plataforma": { punto: "#3b82f6", texto: "#1d4ed8" },
+  "biología": { punto: "#22c55e", texto: "#15803d" },
+  "taller optativo": { punto: "#a855f7", texto: "#7c3aed" },
+  "taller optativo - música": { punto: "#ec4899", texto: "#be185d" },
+  "música ensamble": { punto: "#f43f5e", texto: "#be123c" },
+  "pintura": { punto: "#f59e0b", texto: "#b45309" },
+};
+
+const PALETA_FALLA = [
+  { punto: "#06b6d4", texto: "#0e7490" },
+  { punto: "#8b5cf6", texto: "#6d28d9" },
+  { punto: "#10b981", texto: "#047857" },
+  { punto: "#f97316", texto: "#c2410c" },
+  { punto: "#64748b", texto: "#475569" },
+];
+
+function colorParaMateria(nombre) {
+  if (!nombre || nombre === "—" || nombre === "AUSENTE") {
+    return { punto: "#d1d5db", texto: "#9ca3af" };
+  }
+  const clave = nombre.toLowerCase().trim();
+  if (COLORES_MATERIA[clave]) return COLORES_MATERIA[clave];
+  for (const [k, v] of Object.entries(COLORES_MATERIA)) {
+    if (clave.includes(k) || k.includes(clave)) return v;
+  }
+  let hash = 0;
+  for (let i = 0; i < clave.length; i++) hash = (hash * 31 + clave.charCodeAt(i)) | 0;
+  return PALETA_FALLA[Math.abs(hash) % PALETA_FALLA.length];
+}
+
 const IDX_DIA_POR_DEFECTO = { Sunday: -1, Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3, Friday: 4, Saturday: -1 };
 
 function minutoAHora(min) {
@@ -1506,8 +1537,27 @@ function VistaHorario() {
       ? Math.round(((estado.minutosTotales - estado.minutosRestantes) / estado.minutosTotales) * 100)
       : 0;
 
+  const esFinde = estado.tipo === "finde";
   const reloj = ahora.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   const diaNombre = estado.diaIdx >= 0 ? DIAS[estado.diaIdx] : "FIN DE SEMANA";
+
+  const tituloActividad =
+    estado.tipo === "enClase"
+      ? materiaActual || "Sin actividad"
+      : estado.tipo === "espera"
+        ? "Receso"
+        : estado.tipo === "terminado"
+          ? "Jornada terminada"
+          : "Fin de semana";
+
+  const subtituloActividad =
+    estado.tipo === "enClase" && estado.diaIdx >= 0 && estado.bloqueIdx >= 0
+      ? `${DIAS[estado.diaIdx]} · ${BLOQUES[estado.bloqueIdx].inicio} – ${BLOQUES[estado.bloqueIdx].fin}`
+      : estado.tipo === "espera" && estado.diaIdx >= 0 && estado.bloqueIdx >= 0
+        ? `${DIAS[estado.diaIdx]} · Siguiente: ${horario.grid[estado.bloqueIdx]?.[estado.diaIdx] || "—"} (${BLOQUES[estado.bloqueIdx].inicio})`
+        : estado.tipo === "terminado" && estado.siguienteDia >= 0
+          ? `Mañana ${DIAS[estado.siguienteDia]} · ${horario.grid[0]?.[estado.siguienteDia] || "—"}`
+          : diaNombre;
 
   return (
     <div className="space-y-6">
@@ -1527,25 +1577,15 @@ function VistaHorario() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-widest text-gray-400">En curso ahora</p>
-              <p className="mt-1.5 text-2xl font-semibold tracking-tight">
-                {estado.tipo === "enClase"
-                  ? materiaActual || "—"
-                  : estado.tipo === "espera"
-                    ? "Receso"
-                    : estado.tipo === "terminado"
-                      ? "Jornada terminada"
-                      : "Fin de semana"}
-              </p>
-              <p className="mt-1 text-sm text-gray-400">
-                {estado.diaIdx >= 0 && estado.bloqueIdx >= 0
-                  ? `${DIAS[estado.diaIdx]} · ${BLOQUES[estado.bloqueIdx].inicio} – ${BLOQUES[estado.bloqueIdx].fin}`
-                  : diaNombre}
-              </p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight">{tituloActividad}</p>
+              <p className="mt-1 text-sm text-gray-400">{subtituloActividad}</p>
             </div>
-            <div className="text-right">
-              <p className="text-3xl font-bold tabular-nums tracking-tight">{reloj}</p>
-              <p className="text-xs text-gray-400">{diaNombre}</p>
-            </div>
+            {!esFinde && (
+              <div className="text-right">
+                <p className="text-3xl font-bold tabular-nums tracking-tight">{reloj}</p>
+                <p className="text-xs text-gray-400">{diaNombre}</p>
+              </div>
+            )}
           </div>
 
           {estado.tipo === "enClase" && (
@@ -1568,17 +1608,6 @@ function VistaHorario() {
               Siguiente clase en{" "}
               <span className="font-semibold text-white">
                 {estado.minutosParaSiguiente} min
-              </span>
-              {" — "}
-              {horario.grid[estado.bloqueIdx]?.[estado.diaIdx] || "—"}
-            </div>
-          )}
-
-          {estado.tipo === "terminado" && (
-            <div className="mt-4 text-sm text-gray-400">
-              Mañana:{" "}
-              <span className="font-semibold text-white">
-                {DIAS[estado.siguienteDia]} · {horario.grid[0]?.[estado.siguienteDia] || "—"}
               </span>
             </div>
           )}
@@ -1653,6 +1682,7 @@ function VistaHorario() {
                     const valor = horario.grid[bIdx]?.[dIdx] || "";
                     const esAusente = valor === "AUSENTE";
                     const editandoEsta = celdaEditando?.bloqueIdx === bIdx && celdaEditando?.diaIdx === dIdx;
+                    const color = colorParaMateria(valor);
 
                     return (
                       <td
@@ -1677,17 +1707,24 @@ function VistaHorario() {
                           />
                         ) : (
                           <span
-                            className={
-                              esAusente
-                                ? "text-gray-300"
-                                : esActual
-                                  ? "font-medium text-gray-900"
-                                  : "text-gray-600"
-                            }
+                            className={`inline-flex items-center gap-1.5 ${esAusente ? "" : "font-medium"}`}
+                            style={esAusente ? {} : { color: color.texto }}
                           >
-                            {valor || "—"}
-                            {esActual && (
-                              <span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-blue-500 align-middle animate-pulse" />
+                            {!esAusente && valor && (
+                              <span
+                                className="h-2 w-2 shrink-0 rounded-full"
+                                style={{ backgroundColor: color.punto }}
+                              />
+                            )}
+                            {esAusente ? (
+                              <span className="text-gray-300">{valor || "—"}</span>
+                            ) : (
+                              <>
+                                {valor || "—"}
+                                {esActual && (
+                                  <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                                )}
+                              </>
                             )}
                           </span>
                         )}
