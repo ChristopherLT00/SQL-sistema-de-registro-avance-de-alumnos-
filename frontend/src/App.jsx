@@ -34,6 +34,7 @@ import {
   createAlumno,
   createMateria,
   syncInscripciones,
+  deleteProgreso,
   login as apiLogin,
   setToken,
   clearToken,
@@ -90,7 +91,27 @@ function StatusChip({ entregado }) {
   );
 }
 
-function Indicador({ entregado }) {
+function Indicador({ entregado, onClick }) {
+  const [hover, setHover] = useState(false);
+
+  if (entregado && onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 transition-colors hover:bg-red-500 cursor-pointer"
+        title="Eliminar registro"
+      >
+        {hover ? (
+          <X className="h-3 w-3 text-white" strokeWidth={3} />
+        ) : (
+          <Check className="h-3 w-3 text-white" strokeWidth={3} />
+        )}
+      </button>
+    );
+  }
   if (entregado) {
     return (
       <div className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600">
@@ -1238,7 +1259,11 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
 /*  Vista 4: Matriz general                                             */
 /* ------------------------------------------------------------------ */
 
-function VistaMatriz({ alumnos, materias, inscripciones, progreso }) {
+function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar }) {
+  const [eliminando, setEliminando] = useState(null);
+  const [exito, setExito] = useState(null);
+  const [guardandoEliminacion, setGuardandoEliminacion] = useState(false);
+
   const grupos = useMemo(() => {
     return alumnos.map((alumno) => {
       const filas = inscripciones
@@ -1249,13 +1274,30 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso }) {
             const registro = progreso.find(
               (p) => p.id_alumno === i.id_alumno && p.id_materia === i.id_materia && p.hito === h
             );
-            return !!registro?.cumplio;
+            return registro
+              ? { cumplio: !!registro.cumplio, id: registro.id_progreso, hito: h, id_alumno: i.id_alumno, id_materia: i.id_materia }
+              : null;
           });
           return { id_alumno: i.id_alumno, id_materia: i.id_materia, materiaNombre: materia?.nombre ?? "Materia", celdas };
         });
       return { alumno, filas };
     });
   }, [alumnos, materias, inscripciones, progreso]);
+
+  const confirmarEliminacion = async () => {
+    if (!eliminando) return;
+    setGuardandoEliminacion(true);
+    try {
+      await deleteProgreso(eliminando.id);
+      await onActualizar();
+      setExito("Registro eliminado correctamente.");
+      setEliminando(null);
+    } catch (err) {
+      console.error("Error al eliminar:", err);
+    } finally {
+      setGuardandoEliminacion(false);
+    }
+  };
 
   const descargarMatrizPDF = () => {
     if (grupos.length === 0) return;
@@ -1337,9 +1379,22 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso }) {
                       <td className={`sticky left-0 z-10 border-b border-r border-gray-100 px-4 py-2.5 pl-8 text-gray-600 ${bg}`}>
                         {fila.materiaNombre}
                       </td>
-                      {fila.celdas.map((entregado, cIdx) => (
+                      {fila.celdas.map((celda, cIdx) => (
                         <td key={cIdx} className={`border-b border-gray-100 px-4 py-2.5 text-center ${bg}`}>
-                          <Indicador entregado={entregado} />
+                          <Indicador
+                            entregado={celda?.cumplio}
+                            onClick={
+                              celda
+                                ? () =>
+                                    setEliminando({
+                                      id: celda.id,
+                                      alumno: grupo.alumno.nombre,
+                                      materia: fila.materiaNombre,
+                                      hito: celda.hito,
+                                    })
+                                : undefined
+                            }
+                          />
                         </td>
                       ))}
                     </tr>
@@ -1359,6 +1414,62 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso }) {
           <Indicador entregado={false} /> Hito pendiente
         </span>
       </div>
+
+      {eliminando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Eliminar registro</h3>
+              <button
+                type="button"
+                onClick={() => setEliminando(null)}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Alumno</span>
+                <span className="font-medium text-gray-900">{eliminando.alumno}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Materia</span>
+                <span className="font-medium text-gray-900">{eliminando.materia}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Hito</span>
+                <span className="font-medium text-gray-900">{eliminando.hito}</span>
+              </div>
+            </div>
+            <p className="mt-4 text-xs text-gray-400">Esta accion no se puede deshacer.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEliminando(null)}
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarEliminacion}
+                disabled={guardandoEliminacion}
+                className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {guardandoEliminacion ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <X className="h-4 w-4" />
+                )}
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Toast mensaje={exito} onclose={() => setExito(null)} />
     </div>
   );
 }
@@ -1908,6 +2019,11 @@ export default function App() {
     setInscripciones(i);
   }, []);
 
+  const manejarActualizarProgreso = useCallback(async () => {
+    const p = await fetchProgreso();
+    setProgreso(p);
+  }, []);
+
   const vistaActual = VISTAS.find((v) => v.id === vista);
   const fechaHoy = new Date().toLocaleDateString("es-MX", {
     day: "numeric",
@@ -1995,6 +2111,7 @@ export default function App() {
               materias={materias}
               inscripciones={inscripciones}
               progreso={progreso}
+              onActualizar={manejarActualizarProgreso}
             />
           )}
         </main>

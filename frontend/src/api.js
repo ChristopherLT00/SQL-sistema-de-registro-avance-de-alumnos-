@@ -176,3 +176,12 @@ export async function registrarAvanceLote(idAlumno, hito, materiasIds) {
   if (!res.ok) throw new Error("Error al registrar avance en lote");
   return res.json();
 }
+
+export async function deleteProgreso(id) {
+  const res = await fetch(`${API}/progreso/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Error al eliminar registro");
+  return res.json();
+}
