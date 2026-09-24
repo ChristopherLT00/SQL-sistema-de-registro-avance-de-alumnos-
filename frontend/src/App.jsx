@@ -1342,18 +1342,17 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar 
 
       <div
         className="overflow-auto rounded-2xl border border-gray-100 bg-white shadow-sm"
-        style={{ maxHeight: "32rem" }}
       >
-        <table className="w-full min-w-max border-collapse text-sm">
+        <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="sticky left-0 top-0 z-20 w-64 border-b border-r border-gray-100 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+              <th className="sticky left-0 top-0 z-20 w-44 border-b border-r border-gray-100 bg-gray-50 px-3 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
                 Alumno / Materia
               </th>
               {HITOS.map((h) => (
                 <th
                   key={h}
-                  className="sticky top-0 z-10 border-b border-gray-100 bg-gray-50 px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-gray-500"
+                  className="sticky top-0 z-10 border-b border-gray-100 bg-gray-50 px-2 py-3 text-center text-xs font-medium uppercase tracking-wide text-gray-500"
                 >
                   {h}
                 </th>
@@ -1376,11 +1375,11 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar 
                   </tr>
                   {grupo.filas.map((fila) => (
                     <tr key={`${fila.id_alumno}-${fila.id_materia}`} className={`${bg} hover:brightness-95`}>
-                      <td className={`sticky left-0 z-10 border-b border-r border-gray-100 px-4 py-2.5 pl-8 text-gray-600 ${bg}`}>
+                      <td className={`sticky left-0 z-10 border-b border-r border-gray-100 px-3 py-2 pl-4 text-gray-600 ${bg}`}>
                         {fila.materiaNombre}
                       </td>
                       {fila.celdas.map((celda, cIdx) => (
-                        <td key={cIdx} className={`border-b border-gray-100 px-4 py-2.5 text-center ${bg}`}>
+                        <td key={cIdx} className={`border-b border-gray-100 px-2 py-2 text-center ${bg}`}>
                           <Indicador
                             entregado={celda?.cumplio}
                             onClick={
