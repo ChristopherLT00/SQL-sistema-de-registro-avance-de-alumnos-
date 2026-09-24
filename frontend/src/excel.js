@@ -88,7 +88,7 @@ export function generarExcelMatriz({ grupos, hitos }) {
     grupo.filas.forEach((fila) => {
       const registro = { Alumno: grupo.alumno.nombre, Materia: fila.materiaNombre };
       hitos.forEach((h, i) => {
-        registro[h] = fila.celdas[i] ? "X" : "";
+        registro[h] = fila.celdas[i]?.cumplio ? "X" : "";
       });
       registro.__color = color;
       rows.push(registro);

@@ -119,6 +119,20 @@ function Indicador({ entregado, onClick }) {
       </div>
     );
   }
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        className="mx-auto flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white transition-colors hover:border-blue-600 hover:bg-blue-600 cursor-pointer"
+        title="Registrar hito"
+      >
+        {hover && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+      </button>
+    );
+  }
   return <div className="mx-auto h-5 w-5 rounded-full border border-gray-200" />;
 }
 
@@ -1259,10 +1273,12 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
 /*  Vista 4: Matriz general                                             */
 /* ------------------------------------------------------------------ */
 
-function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar }) {
+function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar, onRegistrar }) {
   const [eliminando, setEliminando] = useState(null);
+  const [registrando, setRegistrando] = useState(null);
   const [exito, setExito] = useState(null);
   const [guardandoEliminacion, setGuardandoEliminacion] = useState(false);
+  const [guardandoRegistro, setGuardandoRegistro] = useState(false);
 
   const grupos = useMemo(() => {
     return alumnos.map((alumno) => {
@@ -1274,9 +1290,13 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar 
             const registro = progreso.find(
               (p) => p.id_alumno === i.id_alumno && p.id_materia === i.id_materia && p.hito === h
             );
-            return registro
-              ? { cumplio: !!registro.cumplio, id: registro.id_progreso, hito: h, id_alumno: i.id_alumno, id_materia: i.id_materia }
-              : null;
+            return {
+              cumplio: !!registro?.cumplio,
+              id: registro?.id_progreso ?? null,
+              hito: h,
+              id_alumno: i.id_alumno,
+              id_materia: i.id_materia,
+            };
           });
           return { id_alumno: i.id_alumno, id_materia: i.id_materia, materiaNombre: materia?.nombre ?? "Materia", celdas };
         });
@@ -1296,6 +1316,20 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar 
       console.error("Error al eliminar:", err);
     } finally {
       setGuardandoEliminacion(false);
+    }
+  };
+
+  const confirmarRegistro = async () => {
+    if (!registrando) return;
+    setGuardandoRegistro(true);
+    try {
+      await onRegistrar(registrando.id_alumno, registrando.id_materia, registrando.hito);
+      setExito("Hito registrado correctamente.");
+      setRegistrando(null);
+    } catch (err) {
+      console.error("Error al registrar:", err);
+    } finally {
+      setGuardandoRegistro(false);
     }
   };
 
@@ -1381,9 +1415,9 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar 
                       {fila.celdas.map((celda, cIdx) => (
                         <td key={cIdx} className={`border-b border-gray-100 px-2 py-2 text-center ${bg}`}>
                           <Indicador
-                            entregado={celda?.cumplio}
+                            entregado={celda.cumplio}
                             onClick={
-                              celda
+                              celda.cumplio
                                 ? () =>
                                     setEliminando({
                                       id: celda.id,
@@ -1391,7 +1425,14 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar 
                                       materia: fila.materiaNombre,
                                       hito: celda.hito,
                                     })
-                                : undefined
+                                : () =>
+                                    setRegistrando({
+                                      id_alumno: celda.id_alumno,
+                                      id_materia: celda.id_materia,
+                                      alumno: grupo.alumno.nombre,
+                                      materia: fila.materiaNombre,
+                                      hito: celda.hito,
+                                    })
                             }
                           />
                         </td>
@@ -1462,6 +1503,59 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar 
                   <X className="h-4 w-4" />
                 )}
                 Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {registrando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Registrar hito</h3>
+              <button
+                type="button"
+                onClick={() => setRegistrando(null)}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Alumno</span>
+                <span className="font-medium text-gray-900">{registrando.alumno}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Materia</span>
+                <span className="font-medium text-gray-900">{registrando.materia}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Hito</span>
+                <span className="font-medium text-gray-900">{registrando.hito}</span>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setRegistrando(null)}
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarRegistro}
+                disabled={guardandoRegistro}
+                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {guardandoRegistro ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                Registrar
               </button>
             </div>
           </div>
@@ -2111,6 +2205,7 @@ export default function App() {
               inscripciones={inscripciones}
               progreso={progreso}
               onActualizar={manejarActualizarProgreso}
+              onRegistrar={manejarRegistro}
             />
           )}
         </main>

@@ -140,7 +140,7 @@ export function generarPDFMatriz({ grupos, hitos }) {
   grupos.forEach((grupo, grupoIdx) => {
     const color = COLORES_GRUPO[grupoIdx % COLORES_GRUPO.length];
     grupo.filas.forEach((fila) => {
-      const celdas = fila.celdas.map((c) => (c ? "X" : ""));
+      const celdas = fila.celdas.map((c) => (c?.cumplio ? "X" : ""));
       rows.push([grupo.alumno.nombre, fila.materiaNombre, ...celdas]);
       rowStyles.push({ fillColor: color });
     });
