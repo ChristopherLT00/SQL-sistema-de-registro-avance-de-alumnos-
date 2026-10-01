@@ -25,6 +25,13 @@ function authHeaders() {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
+function fallo(res, mensaje) {
+  if (res.status === 401) {
+    throw new Error("Token invalido o expirado (401)");
+  }
+  throw new Error(`${mensaje} (${res.status})`);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Login                                                              */
 /* ------------------------------------------------------------------ */
@@ -48,7 +55,7 @@ export async function login(usuario, contrasena) {
 
 export async function fetchAlumnos() {
   const res = await fetch(`${API}/alumnos`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Error al obtener alumnos");
+  if (!res.ok) fallo(res, "Error al obtener alumnos");
   return res.json();
 }
 
@@ -71,7 +78,7 @@ export async function createAlumno({ nombre, cuenta, contrasena }) {
 
 export async function fetchMaterias() {
   const res = await fetch(`${API}/materias`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Error al obtener materias");
+  if (!res.ok) fallo(res, "Error al obtener materias");
   return res.json();
 }
 
@@ -81,7 +88,7 @@ export async function fetchMaterias() {
 
 export async function fetchInscripciones() {
   const res = await fetch(`${API}/inscripciones`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Error al obtener inscripciones");
+  if (!res.ok) fallo(res, "Error al obtener inscripciones");
   return res.json();
 }
 
@@ -91,7 +98,10 @@ export async function createMateria(nombre) {
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ nombre }),
   });
-  if (!res.ok) throw new Error("Error al crear materia");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al crear materia");
+  }
   return res.json();
 }
 
@@ -101,7 +111,7 @@ export async function syncInscripciones(idAlumno, materiasIds) {
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ id_alumno: idAlumno, materias: materiasIds }),
   });
-  if (!res.ok) throw new Error("Error al sincronizar inscripciones");
+  if (!res.ok) fallo(res, "Error al sincronizar inscripciones");
   return res.json();
 }
 
@@ -111,7 +121,7 @@ export async function syncInscripciones(idAlumno, materiasIds) {
 
 export async function fetchHorario() {
   const res = await fetch(`${API}/horario`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Error al obtener horario");
+  if (!res.ok) fallo(res, "Error al obtener horario");
   return res.json();
 }
 
@@ -121,7 +131,7 @@ export async function saveHorario(grid) {
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ grid }),
   });
-  if (!res.ok) throw new Error("Error al guardar horario");
+  if (!res.ok) fallo(res, "Error al guardar horario");
   return res.json();
 }
 
@@ -134,7 +144,7 @@ export async function fetchProgreso(alumnoId) {
     ? `${API}/progreso?alumno_id=${alumnoId}`
     : `${API}/progreso`;
   const res = await fetch(url, { headers: authHeaders() });
-  if (!res.ok) throw new Error("Error al obtener progreso");
+  if (!res.ok) fallo(res, "Error al obtener progreso");
   return res.json();
 }
 
@@ -149,7 +159,7 @@ export async function registrarAvance(idAlumno, idMateria, hito) {
       cumplio: true,
     }),
   });
-  if (!res.ok) throw new Error("Error al registrar avance");
+  if (!res.ok) fallo(res, "Error al registrar avance");
   return res.json();
 }
 
@@ -159,7 +169,10 @@ export async function updateAlumno(id, { nombre, cuenta, contrasena }) {
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ nombre, cuenta, contrasena }),
   });
-  if (!res.ok) throw new Error("Error al actualizar alumno");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al actualizar alumno");
+  }
   return res.json();
 }
 
@@ -173,7 +186,7 @@ export async function registrarAvanceLote(idAlumno, hito, materiasIds) {
       materias: materiasIds,
     }),
   });
-  if (!res.ok) throw new Error("Error al registrar avance en lote");
+  if (!res.ok) fallo(res, "Error al registrar avance en lote");
   return res.json();
 }
 
@@ -182,6 +195,6 @@ export async function deleteProgreso(id) {
     method: "DELETE",
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error("Error al eliminar registro");
+  if (!res.ok) fallo(res, "Error al eliminar registro");
   return res.json();
 }

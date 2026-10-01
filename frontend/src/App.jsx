@@ -187,7 +187,7 @@ function Toast({ mensaje, onclose }) {
 /*  LoginForm                                                          */
 /* ------------------------------------------------------------------ */
 
-function LoginForm({ onLogin }) {
+function LoginForm({ onLogin, aviso }) {
   const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [error, setError] = useState("");
@@ -221,6 +221,12 @@ function LoginForm({ onLogin }) {
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Calificaciones</h1>
           <p className="text-sm text-gray-400 mt-1">Ciclo escolar 2026</p>
         </div>
+
+        {aviso && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            {aviso}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm space-y-5">
           <div>
@@ -1978,6 +1984,8 @@ export default function App() {
   const [inscripciones, setInscripciones] = useState([]);
   const [progreso, setProgreso] = useState([]);
   const [notificacion, setNotificacion] = useState(null);
+  const [errorCarga, setErrorCarga] = useState(null);
+  const [avisoSesion, setAvisoSesion] = useState("");
   const prevMateriaRef = useRef(null);
   const notifActivaRef = useRef(false);
   const horarioRef = useRef(null);
@@ -2052,11 +2060,15 @@ export default function App() {
       setMaterias(m);
       setInscripciones(i);
       setProgreso(p);
+      setErrorCarga(null);
     } catch (err) {
       console.error("Error cargando datos:", err);
       if (err.message.includes("401") || err.message.includes("Token")) {
         clearToken();
+        setAvisoSesion("Tu sesion expiro, inicia sesion de nuevo.");
         setAutenticado(false);
+      } else {
+        setErrorCarga(err.message || "No se pudieron cargar los datos.");
       }
     } finally {
       setCargando(false);
@@ -2071,6 +2083,8 @@ export default function App() {
   }, [autenticado, cargarDatos]);
 
   const manejarLogin = () => {
+    setAvisoSesion("");
+    setErrorCarga(null);
     setAutenticado(true);
     setCargando(true);
   };
@@ -2084,10 +2098,6 @@ export default function App() {
     setInscripciones([]);
     setProgreso([]);
   };
-
-  if (!autenticado) {
-    return <LoginForm onLogin={manejarLogin} />;
-  }
 
   const manejarRegistro = useCallback(async (idAlumno, idMateria, hito) => {
     await registrarAvance(idAlumno, idMateria, hito);
@@ -2116,6 +2126,10 @@ export default function App() {
     const p = await fetchProgreso();
     setProgreso(p);
   }, []);
+
+  if (!autenticado) {
+    return <LoginForm onLogin={manejarLogin} aviso={avisoSesion} />;
+  }
 
   const vistaActual = VISTAS.find((v) => v.id === vista);
   const fechaHoy = new Date().toLocaleDateString("es-MX", {
@@ -2178,6 +2192,25 @@ export default function App() {
         <main className="flex-1 overflow-auto bg-gray-50 px-8 py-8">
           {cargando ? (
             <LoadingScreen />
+          ) : errorCarga ? (
+            <div className="mx-auto max-w-md rounded-2xl border border-red-100 bg-white p-6 text-center shadow-sm">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red-50">
+                <X className="h-5 w-5 text-red-500" />
+              </div>
+              <h3 className="text-sm font-semibold text-gray-900">No se pudieron cargar los datos</h3>
+              <p className="mt-1 text-sm text-gray-500">{errorCarga}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setCargando(true);
+                  cargarDatos();
+                }}
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Reintentar
+              </button>
+            </div>
           ) : vista === "credenciales" ? (
             <VistaCredenciales alumnos={alumnos} onActualizar={manejarActualizarAlumno} />
           ) : vista === "registro" ? (
