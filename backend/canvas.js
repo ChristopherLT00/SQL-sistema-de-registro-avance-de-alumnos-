@@ -280,9 +280,9 @@ async function sincronizarAlumno(pool, alumno, datos) {
 
     if (porHito.size === 0) continue;
 
-    // entregas del alumno en este curso
+    // entregas del alumno en este curso (+ comentarios del maestro)
     const subs = await apiGet(
-      `/api/v1/courses/${curso.id}/students/submissions?per_page=100`,
+      `/api/v1/courses/${curso.id}/students/submissions?per_page=100&include[]=submission_comments`,
       jar
     );
     const subPorAssign = new Map(subs.map((s) => [s.assignment_id, s]));
@@ -290,13 +290,37 @@ async function sincronizarAlumno(pool, alumno, datos) {
     for (const [hito, acts] of porHito) {
       let enviada = false;
       let nota = null;
+      let fechaEntrega = null;
+      const comentarios = [];
+      const nombresActs = [];
       for (const a of acts) {
         const s = subPorAssign.get(a.id);
-        if (s && s.submitted_at) enviada = true;
+        nombresActs.push(a.name.trim());
+        if (s && s.submitted_at) {
+          enviada = true;
+          if (!fechaEntrega || s.submitted_at > fechaEntrega) fechaEntrega = s.submitted_at;
+        }
         if (s && s.score != null && (nota == null || s.score > nota)) nota = s.score;
+        if (s && Array.isArray(s.submission_comments)) {
+          for (const c of s.submission_comments) {
+            if (c && c.comment) comentarios.push(`${c.author_name}: ${c.comment}`);
+          }
+        }
       }
 
       if (!enviada && nota == null) continue; // nada que registrar
+
+      const comentario = comentarios.length ? comentarios.join("\n") : null;
+      const actividadCanvas = nombresActs.join(" + ");
+      const args = [
+        alumno.id_alumno,
+        materia.id_materia,
+        hito,
+        nota,
+        fechaEntrega,
+        comentario,
+        actividadCanvas,
+      ];
 
       const existente = await pool.query(
         `SELECT id_progreso, cumplio, calificacion FROM progreso
@@ -308,9 +332,11 @@ async function sincronizarAlumno(pool, alumno, datos) {
         // solo crear registro si esta enviada (nunca crear "pendiente" artificial)
         if (!enviada) continue;
         await pool.query(
-          `INSERT INTO progreso (id_alumno, id_materia, hito, cumplio, calificacion, fecha_registro)
-           VALUES ($1, $2, $3, true, $4, CURRENT_TIMESTAMP)`,
-          [alumno.id_alumno, materia.id_materia, hito, nota]
+          `INSERT INTO progreso (id_alumno, id_materia, hito, cumplio, calificacion,
+                                 fecha_entrega, comentario, actividad_canvas, origen,
+                                 sincronizado_en, fecha_registro)
+           VALUES ($1, $2, $3, true, $4, $5, $6, $7, 'canvas', now(), CURRENT_TIMESTAMP)`,
+          args
         );
         resultado.hitos_marcados++;
         if (nota != null) resultado.calificaciones++;
@@ -319,11 +345,18 @@ async function sincronizarAlumno(pool, alumno, datos) {
         // solo marcar, nunca desmarcar
         const cumpleAhora = fila.cumplio || enviada;
         const califAhora = nota != null ? nota : fila.calificacion;
-        if (cumpleAhora !== fila.cumplio || califAhora !== fila.calificacion) {
+        const cambio = cumpleAhora !== fila.cumplio || califAhora !== fila.calificacion;
+        if (cambio || fechaEntrega) {
           await pool.query(
-            `UPDATE progreso SET cumplio = $1, calificacion = $2, fecha_registro = CURRENT_TIMESTAMP
-             WHERE id_progreso = $3`,
-            [cumpleAhora, califAhora, fila.id_progreso]
+            `UPDATE progreso SET cumplio = $1, calificacion = $2,
+                    fecha_entrega = COALESCE($3, fecha_entrega),
+                    comentario = COALESCE($4, comentario),
+                    actividad_canvas = COALESCE($5, actividad_canvas),
+                    origen = 'canvas',
+                    sincronizado_en = now(),
+                    fecha_registro = CASE WHEN $6 THEN CURRENT_TIMESTAMP ELSE fecha_registro END
+             WHERE id_progreso = $7`,
+            [cumpleAhora, califAhora, fechaEntrega, comentario, actividadCanvas, cambio, fila.id_progreso]
           );
           if (enviada && !fila.cumplio) resultado.hitos_marcados++;
           if (nota != null && fila.calificacion == null) resultado.calificaciones++;

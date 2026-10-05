@@ -217,3 +217,9 @@ export async function fetchNotasMateria() {
   if (!res.ok) fallo(res, "Error al obtener calificaciones globales");
   return res.json();
 }
+
+export async function fetchBitacora() {
+  const res = await fetch(`${API}/bitacora-sync`, { headers: authHeaders() });
+  if (!res.ok) fallo(res, "Error al obtener la bitacora de sincronizaciones");
+  return res.json();
+}

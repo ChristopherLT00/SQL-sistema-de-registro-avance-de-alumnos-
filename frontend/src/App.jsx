@@ -23,6 +23,9 @@ import {
   RotateCcw,
   Bell,
   RefreshCw,
+  ScrollText,
+  History,
+  FileSearch,
 } from "lucide-react";
 import {
   fetchAlumnos,
@@ -38,6 +41,7 @@ import {
   deleteProgreso,
   syncCanvas,
   fetchNotasMateria,
+  fetchBitacora,
   login as apiLogin,
   setToken,
   clearToken,
@@ -71,6 +75,7 @@ const VISTAS = [
   { id: "registro", nombre: "Registro semanal", icon: ClipboardList },
   { id: "avance", nombre: "Avance individual", icon: UserSearch },
   { id: "matriz", nombre: "Matriz general", icon: Table2 },
+  { id: "auditoria", nombre: "Auditoria", icon: ScrollText },
   { id: "horario", nombre: "Horario escolar", icon: Calendar },
 ];
 
@@ -94,9 +99,56 @@ function StatusChip({ entregado }) {
   );
 }
 
-function Indicador({ entregado, onClick, nota }) {
+function normalizarTexto(texto) {
+  return String(texto || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatearFecha(iso) {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleString("es-MX", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return null;
+  }
+}
+
+// Detalle multi-linea con toda la evidencia del registro
+function lineasRegistro({ nota, fechaEntrega, comentario, sincronizado }) {
+  const lineas = [];
+  if (nota != null) lineas.push(`Calificacion: ${nota}`);
+  const entrega = formatearFecha(fechaEntrega);
+  if (entrega) lineas.push(`Entrega: ${entrega}`);
+  if (comentario) {
+    const c = comentario.replace(/\n+/g, " | ");
+    lineas.push(`Comentario: ${c.length > 160 ? c.slice(0, 157) + "..." : c}`);
+  }
+  const sync = formatearFecha(sincronizado);
+  if (sync) lineas.push(`Sincronizado: ${sync}`);
+  return lineas;
+}
+
+function tituloRegistro(ctx) {
+  const lineas = lineasRegistro(ctx);
+  if (lineas.length === 0) return ctx.base;
+  return `${ctx.base}\n${lineas.join("\n")}`;
+}
+
+function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincronizado }) {
   const [hover, setHover] = useState(false);
-  const titulo = nota != null ? `Calificacion: ${nota}` : entregado ? "Hito entregado" : "Hito pendiente";
+  const detalle = { nota, fechaEntrega, comentario, sincronizado };
+  const titulo = tituloRegistro({ ...detalle, base: entregado ? "Hito entregado" : "Hito pendiente" });
+  const tituloEliminar = ["Eliminar registro", ...lineasRegistro(detalle)].join("\n");
 
   if (entregado && onClick) {
     return (
@@ -106,7 +158,7 @@ function Indicador({ entregado, onClick, nota }) {
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 transition-colors hover:bg-red-500 cursor-pointer"
-        title={nota != null ? `Eliminar · ${titulo}` : "Eliminar registro"}
+        title={tituloEliminar}
       >
         {hover ? (
           <X className="h-3 w-3 text-white" strokeWidth={3} />
@@ -1096,6 +1148,9 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
               cumplio: !!registro?.cumplio,
               fecha_registro: registro?.fecha_registro,
               nota: registro?.calificacion ?? null,
+              fecha_entrega: registro?.fecha_entrega ?? null,
+              comentario: registro?.comentario ?? null,
+              sincronizado_en: registro?.sincronizado_en ?? null,
             };
           });
         return { materia, hitos };
@@ -1278,7 +1333,13 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
                       <div
                         key={h.hito}
                         className="flex items-center gap-1.5 rounded-full border border-gray-100 bg-gray-50 px-2.5 py-1"
-                        title={h.nota != null ? `Calificacion: ${h.nota}` : undefined}
+                        title={tituloRegistro({
+                          nota: h.nota,
+                          fechaEntrega: h.fecha_entrega,
+                          comentario: h.comentario,
+                          sincronizado: h.sincronizado_en,
+                          base: `Hito ${h.hito}`,
+                        })}
                       >
                         <span className="text-xs font-medium text-gray-500">{h.hito}</span>
                         {h.nota != null && (
@@ -1294,6 +1355,317 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Vista: Auditoria (bitacora de sync + registros con evidencia)      */
+/* ------------------------------------------------------------------ */
+
+function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
+  const [filtroAlumno, setFiltroAlumno] = useState("");
+  const [filtroMateria, setFiltroMateria] = useState("");
+  const [filtroOrigen, setFiltroOrigen] = useState("todos");
+  const [filtroHito, setFiltroHito] = useState("todos");
+  const [busqueda, setBusqueda] = useState("");
+
+  const nombreAlumno = useCallback(
+    (id) => alumnos.find((a) => a.id_alumno === id)?.nombre ?? `Alumno ${id}`,
+    [alumnos]
+  );
+  const nombreMateria = useCallback(
+    (id) => materias.find((m) => m.id_materia === id)?.nombre ?? `Materia ${id}`,
+    [materias]
+  );
+
+  const registros = useMemo(() => {
+    const q = normalizarTexto(busqueda);
+    return progreso
+      .filter((p) => {
+        if (filtroAlumno && p.id_alumno !== Number(filtroAlumno)) return false;
+        if (filtroMateria && p.id_materia !== Number(filtroMateria)) return false;
+        if (filtroOrigen !== "todos" && (p.origen ?? "manual") !== filtroOrigen) return false;
+        if (filtroHito !== "todos" && p.hito !== filtroHito) return false;
+        if (q) {
+          const heno = normalizarTexto(
+            `${nombreAlumno(p.id_alumno)} ${nombreMateria(p.id_materia)} ${p.hito} ${
+              p.comentario ?? ""
+            } ${p.actividad_canvas ?? ""}`
+          );
+          if (!heno.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const na = nombreAlumno(a.id_alumno).localeCompare(nombreAlumno(b.id_alumno));
+        if (na !== 0) return na;
+        return String(a.hito).localeCompare(String(b.hito));
+      });
+  }, [progreso, filtroAlumno, filtroMateria, filtroOrigen, filtroHito, busqueda, nombreAlumno, nombreMateria]);
+
+  const alumnosIds = useMemo(() => [...new Set(progreso.map((p) => p.id_alumno))], [progreso]);
+
+  const campoSelect =
+    "rounded-full border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
+
+  const fmt = (iso) => {
+    if (!iso) return "-";
+    try {
+      return new Date(iso).toLocaleString("es-MX", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "-";
+    }
+  };
+
+  const fmtDuracion = (ms) => (ms != null ? `${(ms / 1000).toFixed(1)} s` : "-");
+
+  const totalConOrigen = registros.filter((r) => (r.origen ?? "manual") === "canvas").length;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-gray-900">Auditoria</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Historial de sincronizaciones con Canvas y evidencia de cada registro: entrega, comentario y origen.
+        </p>
+      </div>
+
+      {/* Bitacora de sincronizaciones */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
+          <History className="h-4 w-4 text-blue-600" />
+          Historial de sincronizaciones
+        </h3>
+        {!bitacora || bitacora.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-400">
+            Aun no hay sincronizaciones registradas. Presiona "Sincronizar" en la Matriz general.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
+                  <th className="px-2 py-2 font-medium">Fecha</th>
+                  <th className="px-2 py-2 font-medium">Duracion</th>
+                  <th className="px-2 py-2 font-medium">Alumnos</th>
+                  <th className="px-2 py-2 font-medium">Hitos</th>
+                  <th className="px-2 py-2 font-medium">Califs.</th>
+                  <th className="px-2 py-2 font-medium">Globales</th>
+                  <th className="px-2 py-2 font-medium">Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bitacora.map((b) => {
+                  const errores = Array.isArray(b.errores) ? b.errores : [];
+                  const sinMatch = Array.isArray(b.actividades_sin_match)
+                    ? b.actividades_sin_match
+                    : [];
+                  const cursosSin = Array.isArray(b.cursos_sin_match) ? b.cursos_sin_match : [];
+                  const conError = (b.alumnos_error ?? 0) > 0 || errores.length > 0;
+                  return (
+                    <tr key={b.id} className="border-b border-gray-50 text-gray-700">
+                      <td className="whitespace-nowrap px-2 py-2">{fmt(b.iniciado_en)}</td>
+                      <td className="whitespace-nowrap px-2 py-2">{fmtDuracion(b.duracion_ms)}</td>
+                      <td className="whitespace-nowrap px-2 py-2">
+                        <span className="font-medium text-gray-900">{b.alumnos_ok ?? 0}</span>
+                        {conError && (
+                          <span className="ml-1 text-red-500">({b.alumnos_error} err.)</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2">{b.hitos_marcados ?? 0}</td>
+                      <td className="px-2 py-2">{b.calificaciones ?? 0}</td>
+                      <td className="px-2 py-2">{b.global_actualizadas ?? 0}</td>
+                      <td className="px-2 py-2">
+                        {errores.length === 0 && sinMatch.length === 0 && cursosSin.length === 0 ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Limpia
+                          </span>
+                        ) : (
+                          <details className="text-xs text-gray-500">
+                            <summary className="cursor-pointer font-medium text-gray-600">
+                              Ver ({errores.length + sinMatch.length + cursosSin.length})
+                            </summary>
+                            <ul className="mt-1 max-w-md list-inside list-disc space-y-0.5 pl-1">
+                              {errores.map((e, i) => (
+                                <li key={`e${i}`} className="text-red-600">
+                                  {e.alumno}: {e.error}
+                                </li>
+                              ))}
+                              {cursosSin.map((c, i) => (
+                                <li key={`c${i}`}>Curso sin materia: {c}</li>
+                              ))}
+                              {sinMatch.map((s, i) => (
+                                <li key={`s${i}`}>Sin hito: {s}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Registros con evidencia */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+            <FileSearch className="h-4 w-4 text-blue-600" />
+            Registros con evidencia
+            <span className="font-normal text-gray-400">({registros.length})</span>
+          </h3>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar alumno, materia, comentario..."
+              className="w-64 rounded-full border border-gray-200 bg-gray-50 py-2 pl-9 pr-4 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-2">
+          <select value={filtroAlumno} onChange={(e) => setFiltroAlumno(e.target.value)} className={campoSelect}>
+            <option value="">Todos los alumnos</option>
+            {alumnosIds.map((id) => (
+              <option key={id} value={id}>
+                {nombreAlumno(id)}
+              </option>
+            ))}
+          </select>
+          <select value={filtroMateria} onChange={(e) => setFiltroMateria(e.target.value)} className={campoSelect}>
+            <option value="">Todas las materias</option>
+            {materias.map((m) => (
+              <option key={m.id_materia} value={m.id_materia}>
+                {m.nombre}
+              </option>
+            ))}
+          </select>
+          <select value={filtroHito} onChange={(e) => setFiltroHito(e.target.value)} className={campoSelect}>
+            <option value="todos">Todos los hitos</option>
+            {HITOS.map((h) => (
+              <option key={h} value={h}>
+                Hito {h}
+              </option>
+            ))}
+          </select>
+          <select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)} className={campoSelect}>
+            <option value="todos">Todos los origenes</option>
+            <option value="canvas">Canvas</option>
+            <option value="manual">Manual</option>
+          </select>
+          <span className="self-center text-xs text-gray-400">
+            {totalConOrigen} de {registros.length} vienen de Canvas
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
+                <th className="px-2 py-2 font-medium">Alumno</th>
+                <th className="px-2 py-2 font-medium">Materia</th>
+                <th className="px-2 py-2 font-medium">Hito</th>
+                <th className="px-2 py-2 font-medium">Estado</th>
+                <th className="px-2 py-2 font-medium">Calif.</th>
+                <th className="px-2 py-2 font-medium">F. entrega</th>
+                <th className="px-2 py-2 font-medium">Comentario</th>
+                <th className="px-2 py-2 font-medium">Actividad en Canvas</th>
+                <th className="px-2 py-2 font-medium">Origen</th>
+                <th className="px-2 py-2 font-medium">Sincronizado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {registros.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-2 py-8 text-center text-sm text-gray-400">
+                    No hay registros que coincidan con los filtros.
+                  </td>
+                </tr>
+              ) : (
+                registros.map((p) => {
+                  const origen = p.origen ?? "manual";
+                  const comentario = p.comentario ?? null;
+                  return (
+                    <tr key={p.id_progreso} className="border-b border-gray-50 text-gray-700 hover:bg-gray-50">
+                      <td className="whitespace-nowrap px-2 py-2 text-gray-900">
+                        {nombreAlumno(p.id_alumno)}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2">{nombreMateria(p.id_materia)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 font-medium">{p.hito}</td>
+                      <td className="px-2 py-2">
+                        {p.cumplio ? (
+                          <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                        ) : (
+                          <span className="text-xs text-gray-400">Pendiente</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2">
+                        {p.calificacion != null ? (
+                          <span className="font-semibold text-blue-700">{p.calificacion}</span>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2">{fmt(p.fecha_entrega)}</td>
+                      <td className="max-w-xs px-2 py-2">
+                        {comentario ? (
+                          <span className="block truncate text-gray-600" title={comentario}>
+                            {comentario.replace(/\n+/g, " | ")}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
+                      </td>
+                      <td className="max-w-xs px-2 py-2">
+                        {p.actividad_canvas ? (
+                          <span className="block truncate text-gray-500" title={p.actividad_canvas}>
+                            {p.actividad_canvas}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2">
+                        <span
+                          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                            origen === "canvas"
+                              ? "bg-blue-50 text-blue-700"
+                              : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {origen === "canvas" ? "Canvas" : "Manual"}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2 text-gray-500">
+                        {fmt(p.sincronizado_en)}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        {registros.length > 300 && (
+          <p className="mt-3 text-xs text-gray-400">
+            Mostrando {registros.length} registros. Usa los filtros para reducir la lista.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -1387,6 +1759,9 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar,
               cumplio: !!registro?.cumplio,
               id: registro?.id_progreso ?? null,
               nota: registro?.calificacion ?? null,
+              fecha_entrega: registro?.fecha_entrega ?? null,
+              comentario: registro?.comentario ?? null,
+              sincronizado_en: registro?.sincronizado_en ?? null,
               hito: h,
               id_alumno: i.id_alumno,
               id_materia: i.id_materia,
@@ -1542,6 +1917,9 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar,
                           <Indicador
                             entregado={celda.cumplio}
                             nota={celda.nota}
+                            fechaEntrega={celda.fecha_entrega}
+                            comentario={celda.comentario}
+                            sincronizado={celda.sincronizado_en}
                             onClick={
                               celda.cumplio
                                 ? () =>
@@ -2104,6 +2482,7 @@ export default function App() {
   const [inscripciones, setInscripciones] = useState([]);
   const [progreso, setProgreso] = useState([]);
   const [notasMateria, setNotasMateria] = useState([]);
+  const [bitacora, setBitacora] = useState([]);
   const [notificacion, setNotificacion] = useState(null);
   const [errorCarga, setErrorCarga] = useState(null);
   const [avisoSesion, setAvisoSesion] = useState("");
@@ -2184,6 +2563,7 @@ export default function App() {
       setErrorCarga(null);
       // notas_materia puede no existir aun (tabla nueva): no romper la carga
       fetchNotasMateria().then(setNotasMateria).catch(() => {});
+      fetchBitacora().then(setBitacora).catch(() => {});
     } catch (err) {
       console.error("Error cargando datos:", err);
       if (err.message.includes("401") || err.message.includes("Token")) {
@@ -2249,6 +2629,7 @@ export default function App() {
     const p = await fetchProgreso();
     setProgreso(p);
     fetchNotasMateria().then(setNotasMateria).catch(() => {});
+    fetchBitacora().then(setBitacora).catch(() => {});
   }, []);
 
   if (!autenticado) {
@@ -2353,6 +2734,13 @@ export default function App() {
               inscripciones={inscripciones}
               progreso={progreso}
               notasMateria={notasMateria}
+            />
+          ) : vista === "auditoria" ? (
+            <VistaAuditoria
+              alumnos={alumnos}
+              materias={materias}
+              progreso={progreso}
+              bitacora={bitacora}
             />
           ) : vista === "horario" ? (
             <VistaHorario />

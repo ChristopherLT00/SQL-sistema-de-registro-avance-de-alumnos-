@@ -254,7 +254,7 @@ app.post("/api/progreso/lote", async (req, res) => {
         `INSERT INTO progreso (id_alumno, id_materia, hito, cumplio, fecha_registro)
          VALUES ($1, $2, $3, true, CURRENT_TIMESTAMP)
          ON CONFLICT (id_alumno, id_materia, hito)
-         DO UPDATE SET cumplio = true, fecha_registro = CURRENT_TIMESTAMP
+         DO UPDATE SET cumplio = true, fecha_registro = CURRENT_TIMESTAMP, origen = 'manual'
          RETURNING *`,
         [id_alumno, id_materia, hito]
       );
@@ -277,7 +277,7 @@ app.post("/api/progreso", async (req, res) => {
       `INSERT INTO progreso (id_alumno, id_materia, hito, cumplio, fecha_registro)
        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
        ON CONFLICT (id_alumno, id_materia, hito)
-       DO UPDATE SET cumplio = $4, fecha_registro = CURRENT_TIMESTAMP
+       DO UPDATE SET cumplio = $4, fecha_registro = CURRENT_TIMESTAMP, origen = 'manual'
        RETURNING *`,
       [id_alumno, id_materia, hito, cumplio ?? true]
     );
@@ -292,7 +292,7 @@ app.put("/api/progreso/:id", async (req, res) => {
     const { id } = req.params;
     const { cumplio } = req.body;
     const result = await pool.query(
-      "UPDATE progreso SET cumplio = $1, fecha_registro = CURRENT_TIMESTAMP WHERE id_progreso = $2 RETURNING *",
+      "UPDATE progreso SET cumplio = $1, fecha_registro = CURRENT_TIMESTAMP, origen = 'manual' WHERE id_progreso = $2 RETURNING *",
       [cumplio, id]
     );
     if (result.rowCount === 0) {
@@ -369,6 +369,17 @@ app.get("/api/notas-materia", async (req, res) => {
   }
 });
 
+app.get("/api/bitacora-sync", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM bitacora_sync ORDER BY iniciado_en DESC LIMIT 30"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 let sincronizandoEnCurso = false;
 
 app.post("/api/canvas/sync", async (req, res) => {
@@ -376,9 +387,34 @@ app.post("/api/canvas/sync", async (req, res) => {
     return res.status(409).json({ error: "Ya hay una sincronizacion en curso" });
   }
   sincronizandoEnCurso = true;
+  const iniciado = Date.now();
   try {
     const resumen = await sincronizarTodo(pool);
-    res.json(resumen);
+    const duracion = Date.now() - iniciado;
+    try {
+      await pool.query(
+        `INSERT INTO bitacora_sync (duracion_ms, alumnos_ok, alumnos_error, alumnos_sin_cuenta,
+           hitos_marcados, calificaciones, global_actualizadas, actividades_ignoradas,
+           cursos_sin_match, actividades_sin_match, errores)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          duracion,
+          resumen.alumnos_ok,
+          resumen.alumnos_error,
+          resumen.alumnos_sin_cuenta,
+          resumen.hitos_marcados,
+          resumen.calificaciones,
+          resumen.global_actualizadas,
+          resumen.actividades_ignoradas,
+          JSON.stringify(resumen.cursos_sin_match),
+          JSON.stringify(resumen.actividades_sin_match),
+          JSON.stringify(resumen.errores),
+        ]
+      );
+    } catch (bitErr) {
+      console.error("No se pudo guardar la bitacora de sync:", bitErr.message);
+    }
+    res.json({ ...resumen, duracion_ms: duracion });
   } catch (err) {
     res.status(500).json({ error: err.message });
   } finally {
