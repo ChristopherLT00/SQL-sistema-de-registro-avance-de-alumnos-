@@ -27,6 +27,7 @@ import {
   ScrollText,
   History,
   FileSearch,
+  UserCog,
 } from "lucide-react";
 import {
   fetchAlumnos,
@@ -47,6 +48,11 @@ import {
   setToken,
   clearToken,
   isLoggedIn,
+  obtenerSesion,
+  fetchUsuarios,
+  createUsuario,
+  updateUsuario,
+  deleteUsuario,
 } from "./api";
 import { generarPDFAvance, generarPDFMatriz } from "./pdf";
 import { generarExcelAvance, generarExcelMatriz } from "./excel";
@@ -89,8 +95,22 @@ const VISTAS = [
   { id: "avance", nombre: "Avance individual", icon: UserSearch },
   { id: "matriz", nombre: "Matriz general", icon: Table2 },
   { id: "auditoria", nombre: "Auditoria", icon: ScrollText },
+  { id: "usuarios", nombre: "Usuarios", icon: UserCog },
   { id: "horario", nombre: "Horario escolar", icon: Calendar },
 ];
+
+// Vistas visibles por rol (la autenticacion de verdad es en el backend)
+const VISTAS_POR_ROL = {
+  admin: ["credenciales", "registro", "avance", "matriz", "auditoria", "usuarios", "horario"],
+  direccion: ["avance", "matriz", "horario"],
+  padre: ["avance", "matriz", "horario"],
+};
+
+const NOMBRES_ROL = {
+  admin: "Administrador",
+  direccion: "Direccion",
+  padre: "Padre",
+};
 
 /* ------------------------------------------------------------------ */
 /*  Componentes auxiliares                                             */
@@ -1248,6 +1268,13 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
   const [hitoDesde, setHitoDesde] = useState(HITOS[0]);
   const [hitoHasta, setHitoHasta] = useState(HITOS[HITOS.length - 1]);
 
+  // si solo hay un alumno visible (padre), entra directo a su hijo
+  useEffect(() => {
+    if (!alumnoId && alumnos.length === 1) {
+      setAlumnoId(String(alumnos[0].id_alumno));
+    }
+  }, [alumnos, alumnoId]);
+
   const datos = useMemo(() => {
     if (!alumnoId) return [];
     return inscripciones
@@ -1876,7 +1903,7 @@ function ReporteSync({ reporte, onCerrar }) {
   );
 }
 
-function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria, onActualizar, onRegistrar }) {
+function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria, onActualizar, onRegistrar, soloLectura = false }) {
   const [eliminando, setEliminando] = useState(null);
   const [registrando, setRegistrando] = useState(null);
   const [exito, setExito] = useState(null);
@@ -1990,20 +2017,22 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
         </div>
         {grupos.length > 0 && (
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={sincronizar}
-              disabled={sincronizando}
-              className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-              title="Entrar a Canvas y revisar entregas/calificaciones"
-            >
-              {sincronizando ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              {sincronizando ? "Sincronizando..." : "Sincronizar"}
-            </button>
+            {!soloLectura && (
+              <button
+                type="button"
+                onClick={sincronizar}
+                disabled={sincronizando}
+                className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                title="Entrar a Canvas y revisar entregas/calificaciones"
+              >
+                {sincronizando ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {sincronizando ? "Sincronizando..." : "Sincronizar"}
+              </button>
+            )}
             <button
               type="button"
               onClick={descargarMatrizPDF}
@@ -2079,22 +2108,24 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
                             comentario={celda.comentario}
                             sincronizado={celda.sincronizado_en}
                             onClick={
-                              celda.cumplio
-                                ? () =>
-                                    setEliminando({
-                                      id: celda.id,
-                                      alumno: grupo.alumno.nombre,
-                                      materia: fila.materiaNombre,
-                                      hito: celda.hito,
-                                    })
-                                : () =>
-                                    setRegistrando({
-                                      id_alumno: celda.id_alumno,
-                                      id_materia: celda.id_materia,
-                                      alumno: grupo.alumno.nombre,
-                                      materia: fila.materiaNombre,
-                                      hito: celda.hito,
-                                    })
+                              soloLectura
+                                ? undefined
+                                : celda.cumplio
+                                  ? () =>
+                                      setEliminando({
+                                        id: celda.id,
+                                        alumno: grupo.alumno.nombre,
+                                        materia: fila.materiaNombre,
+                                        hito: celda.hito,
+                                      })
+                                  : () =>
+                                      setRegistrando({
+                                        id_alumno: celda.id_alumno,
+                                        id_materia: celda.id_materia,
+                                        alumno: grupo.alumno.nombre,
+                                        materia: fila.materiaNombre,
+                                        hito: celda.hito,
+                                      })
                             }
                           />
                         </td>
@@ -2313,7 +2344,7 @@ function NotificacionCambioClase({ notificacion, onCerrar }) {
   );
 }
 
-function VistaHorario() {
+function VistaHorario({ soloLectura = false }) {
   const [horario, setHorario] = useState(HORARIO_DEFAULT);
   const [cargandoHorario, setCargandoHorario] = useState(true);
   const [editando, setEditando] = useState(false);
@@ -2520,14 +2551,16 @@ function VistaHorario() {
                 </button>
               </>
             ) : (
-              <button
-                type="button"
-                onClick={() => setEditando(true)}
-                className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-4 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Editar
-              </button>
+              !soloLectura && (
+                <button
+                  type="button"
+                  onClick={() => setEditando(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-4 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Editar
+                </button>
+              )
             )}
           </div>
         </div>
@@ -2631,11 +2664,343 @@ function VistaHorario() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Vista nueva: Usuarios (solo admin)                                 */
+/* ------------------------------------------------------------------ */
+
+function VistaUsuarios({ alumnos }) {
+  const [usuarios, setUsuarios] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
+  const [form, setForm] = useState({ usuario: "", contrasena: "", rol: "direccion", id_alumno: "" });
+  const [guardando, setGuardando] = useState(false);
+  const [eliminando, setEliminando] = useState(null);
+  const [cambiando, setCambiando] = useState(null);
+  const [nuevaContrasena, setNuevaContrasena] = useState("");
+  const miSesion = obtenerSesion();
+
+  const cargar = useCallback(async () => {
+    try {
+      const lista = await fetchUsuarios();
+      setUsuarios(lista);
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
+
+  const crear = async (e) => {
+    e.preventDefault();
+    if (!form.usuario.trim() || !form.contrasena) return;
+    setGuardando(true);
+    setError(null);
+    try {
+      await createUsuario({
+        usuario: form.usuario.trim(),
+        contrasena: form.contrasena,
+        rol: form.rol,
+        id_alumno: form.rol === "padre" && form.id_alumno ? Number(form.id_alumno) : null,
+      });
+      setForm({ usuario: "", contrasena: "", rol: "direccion", id_alumno: "" });
+      await cargar();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const confirmarEliminacion = async () => {
+    if (!eliminando) return;
+    setGuardando(true);
+    try {
+      await deleteUsuario(eliminando.id_usuario);
+      setEliminando(null);
+      await cargar();
+    } catch (err) {
+      setError(err.message);
+      setEliminando(null);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const guardarContrasena = async () => {
+    if (!cambiando || !nuevaContrasena) return;
+    setGuardando(true);
+    try {
+      await updateUsuario(cambiando.id_usuario, { contrasena: nuevaContrasena });
+      setCambiando(null);
+      setNuevaContrasena("");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const nombreAlumno = (id) =>
+    alumnos.find((a) => a.id_alumno === id)?.nombre ?? "—";
+
+  const campoSelect =
+    "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-gray-900">Usuarios</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Cuentas de acceso a la pagina. Los padres se vinculan a un solo alumno.
+        </p>
+      </div>
+
+      <form
+        onSubmit={crear}
+        className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
+      >
+        <h3 className="mb-4 text-sm font-semibold text-gray-900">Nueva cuenta</h3>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-500">Usuario</label>
+            <input
+              type="text"
+              value={form.usuario}
+              onChange={(e) => setForm({ ...form, usuario: e.target.value })}
+              className={campoSelect}
+              placeholder="ej. padre.perez"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-500">Contrasena</label>
+            <input
+              type="password"
+              value={form.contrasena}
+              onChange={(e) => setForm({ ...form, contrasena: e.target.value })}
+              className={campoSelect}
+              placeholder="minimo 4 caracteres"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-500">Rol</label>
+            <select
+              value={form.rol}
+              onChange={(e) => setForm({ ...form, rol: e.target.value })}
+              className={campoSelect}
+            >
+              <option value="direccion">Direccion</option>
+              <option value="padre">Padre</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          {form.rol === "padre" && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-500">Alumno vinculado</label>
+              <select
+                value={form.id_alumno}
+                onChange={(e) => setForm({ ...form, id_alumno: e.target.value })}
+                className={campoSelect}
+              >
+                <option value="">Selecciona un alumno</option>
+                {alumnos.map((a) => (
+                  <option key={a.id_alumno} value={a.id_alumno}>
+                    {a.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        <button
+          type="submit"
+          disabled={
+            guardando ||
+            !form.usuario.trim() ||
+            !form.contrasena ||
+            (form.rol === "padre" && !form.id_alumno)
+          }
+          className="mt-4 inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+        >
+          {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+          Crear cuenta
+        </button>
+      </form>
+
+      {error && (
+        <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</div>
+      )}
+
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-400">
+              <th className="px-4 py-3 font-medium">Usuario</th>
+              <th className="px-4 py-3 font-medium">Rol</th>
+              <th className="px-4 py-3 font-medium">Alumno vinculado</th>
+              <th className="px-4 py-3 text-right font-medium">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {cargando ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-400">
+                  Cargando usuarios...
+                </td>
+              </tr>
+            ) : usuarios.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-400">
+                  No hay usuarios registrados.
+                </td>
+              </tr>
+            ) : (
+              usuarios.map((u) => {
+                const soyYo = u.id_usuario === miSesion?.id;
+                return (
+                  <tr key={u.id_usuario} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-gray-900">{u.usuario}</span>
+                      {soyYo && (
+                        <span className="ml-2 text-xs text-gray-400">(tu cuenta)</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-block rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                        {NOMBRES_ROL[u.rol] || u.rol}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {u.rol === "padre" ? nombreAlumno(u.id_alumno) : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="inline-flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCambiando(u);
+                            setNuevaContrasena("");
+                          }}
+                          className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                        >
+                          Contrasena
+                        </button>
+                        <button
+                          type="button"
+                          disabled={soyYo}
+                          onClick={() => setEliminando(u)}
+                          className="rounded-full border border-red-100 bg-white px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-gray-100 disabled:text-gray-300"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {eliminando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Eliminar usuario</h3>
+              <button
+                type="button"
+                onClick={() => setEliminando(null)}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600">
+              Se eliminara la cuenta <span className="font-medium">{eliminando.usuario}</span>.
+              Esta persona dejara de poder entrar.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEliminando(null)}
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarEliminacion}
+                disabled={guardando}
+                className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cambiando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Cambiar contrasena</h3>
+              <button
+                type="button"
+                onClick={() => setCambiando(null)}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-3 text-sm text-gray-600">
+              Cuenta: <span className="font-medium">{cambiando.usuario}</span>
+            </p>
+            <input
+              type="password"
+              value={nuevaContrasena}
+              onChange={(e) => setNuevaContrasena(e.target.value)}
+              placeholder="Nueva contrasena"
+              className={campoSelect}
+              autoFocus
+            />
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setCambiando(null)}
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={guardarContrasena}
+                disabled={guardando || !nuevaContrasena}
+                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Aplicacion principal                                                */
 /* ------------------------------------------------------------------ */
 
 export default function App() {
   const [autenticado, setAutenticado] = useState(isLoggedIn);
+  const [sesion, setSesion] = useState(null);
   const [vista, setVista] = useState("credenciales");
   const [cargando, setCargando] = useState(true);
   const [alumnos, setAlumnos] = useState([]);
@@ -2724,11 +3089,15 @@ export default function App() {
       setErrorCarga(null);
       // notas_materia puede no existir aun (tabla nueva): no romper la carga
       fetchNotasMateria().then(setNotasMateria).catch(() => {});
-      fetchBitacora().then(setBitacora).catch(() => {});
+      // la bitacora es solo admin; para otros roles la peticion da 403
+      if (obtenerSesion()?.rol === "admin") {
+        fetchBitacora().then(setBitacora).catch(() => {});
+      }
     } catch (err) {
       console.error("Error cargando datos:", err);
       if (err.message.includes("401") || err.message.includes("Token")) {
         clearToken();
+        setSesion(null);
         setAvisoSesion("Tu sesion expiro, inicia sesion de nuevo.");
         setAutenticado(false);
       } else {
@@ -2747,20 +3116,28 @@ export default function App() {
   }, [autenticado, cargarDatos]);
 
   const manejarLogin = () => {
+    const s = obtenerSesion();
+    setSesion(s);
     setAvisoSesion("");
     setErrorCarga(null);
     setAutenticado(true);
     setCargando(true);
+    // vista inicial segun el rol
+    const ids = VISTAS_POR_ROL[s?.rol] ?? VISTAS_POR_ROL.admin;
+    setVista(s?.rol === "admin" ? "credenciales" : ids[0]);
   };
 
   const manejarLogout = () => {
     clearToken();
+    setSesion(null);
     setAutenticado(false);
     setVista("credenciales");
     setAlumnos([]);
     setMaterias([]);
     setInscripciones([]);
     setProgreso([]);
+    setNotasMateria([]);
+    setBitacora([]);
   };
 
   const manejarRegistro = useCallback(async (idAlumno, idMateria, hito) => {
@@ -2790,14 +3167,23 @@ export default function App() {
     const p = await fetchProgreso();
     setProgreso(p);
     fetchNotasMateria().then(setNotasMateria).catch(() => {});
-    fetchBitacora().then(setBitacora).catch(() => {});
+    if (obtenerSesion()?.rol === "admin") {
+      fetchBitacora().then(setBitacora).catch(() => {});
+    }
   }, []);
 
   if (!autenticado) {
     return <LoginForm onLogin={manejarLogin} aviso={avisoSesion} />;
   }
 
-  const vistaActual = VISTAS.find((v) => v.id === vista);
+  // Vistas permitidas para el rol y redireccion si la actual no aplica
+  const rol = sesion?.rol ?? "admin";
+  const idsPermitidos = VISTAS_POR_ROL[rol] ?? VISTAS_POR_ROL.admin;
+  const vistasVisibles = VISTAS.filter((v) => idsPermitidos.includes(v.id));
+  const vistaSegura = idsPermitidos.includes(vista) ? vista : idsPermitidos[0];
+  const soloLectura = rol !== "admin";
+
+  const vistaActual = VISTAS.find((v) => v.id === vistaSegura);
   const fechaHoy = new Date().toLocaleDateString("es-MX", {
     day: "numeric",
     month: "long",
@@ -2819,9 +3205,9 @@ export default function App() {
           </div>
         </div>
         <nav className="flex overflow-x-auto px-3 py-3 md:flex-1 md:flex-col md:gap-1 md:overflow-visible">
-          {VISTAS.map((v) => {
+          {vistasVisibles.map((v) => {
             const Icono = v.icon;
-            const activa = v.id === vista;
+            const activa = v.id === vistaSegura;
             return (
               <button
                 key={v.id}
@@ -2838,6 +3224,11 @@ export default function App() {
           })}
         </nav>
         <div className="border-t border-gray-100 px-3 py-3">
+          <div className="mb-2 px-3">
+            <p className="truncate text-xs text-gray-400">
+              {sesion?.usuario} · {NOMBRES_ROL[rol] ?? rol}
+            </p>
+          </div>
           <button
             type="button"
             onClick={manejarLogout}
@@ -2877,9 +3268,9 @@ export default function App() {
                 Reintentar
               </button>
             </div>
-          ) : vista === "credenciales" ? (
+          ) : vistaSegura === "credenciales" ? (
             <VistaCredenciales alumnos={alumnos} onActualizar={manejarActualizarAlumno} />
-          ) : vista === "registro" ? (
+          ) : vistaSegura === "registro" ? (
             <VistaRegistro
               alumnos={alumnos}
               materias={materias}
@@ -2888,7 +3279,7 @@ export default function App() {
               onRegistrar={manejarRegistro}
               onRegistrarLote={manejarRegistroLote}
             />
-          ) : vista === "avance" ? (
+          ) : vistaSegura === "avance" ? (
             <VistaAvance
               alumnos={alumnos}
               materias={materias}
@@ -2896,15 +3287,17 @@ export default function App() {
               progreso={progreso}
               notasMateria={notasMateria}
             />
-          ) : vista === "auditoria" ? (
+          ) : vistaSegura === "auditoria" ? (
             <VistaAuditoria
               alumnos={alumnos}
               materias={materias}
               progreso={progreso}
               bitacora={bitacora}
             />
-          ) : vista === "horario" ? (
-            <VistaHorario />
+          ) : vistaSegura === "usuarios" ? (
+            <VistaUsuarios alumnos={alumnos} />
+          ) : vistaSegura === "horario" ? (
+            <VistaHorario soloLectura={soloLectura} />
           ) : (
             <VistaMatriz
               alumnos={alumnos}
@@ -2914,6 +3307,7 @@ export default function App() {
               notasMateria={notasMateria}
               onActualizar={manejarActualizarProgreso}
               onRegistrar={manejarRegistro}
+              soloLectura={soloLectura}
             />
           )}
         </main>

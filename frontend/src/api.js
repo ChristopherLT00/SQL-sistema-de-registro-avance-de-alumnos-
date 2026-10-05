@@ -4,20 +4,47 @@ const API = "/api";
 /*  Token / Auth                                                       */
 /* ------------------------------------------------------------------ */
 
+// El token vive solo en memoria: cada recarga de pagina exige iniciar sesion.
+let tokenMemoria = null;
+try {
+  localStorage.removeItem("token"); // limpia la clave de versiones anteriores
+} catch {
+  /* sin localStorage */
+}
+
 export function getToken() {
-  return localStorage.getItem("token");
+  return tokenMemoria;
 }
 
 export function setToken(token) {
-  localStorage.setItem("token", token);
+  tokenMemoria = token;
 }
 
 export function clearToken() {
-  localStorage.removeItem("token");
+  tokenMemoria = null;
 }
 
 export function isLoggedIn() {
-  return !!getToken();
+  return !!tokenMemoria;
+}
+
+// Decodifica el payload del JWT (rol, id_alumno) sin librerias externas
+export function obtenerSesion() {
+  const t = getToken();
+  if (!t) return null;
+  try {
+    const base64 = t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(base64));
+    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
+    return {
+      id: payload.id ?? null,
+      usuario: payload.usuario ?? "",
+      rol: payload.rol || "admin",
+      id_alumno: payload.id_alumno ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function authHeaders() {
@@ -28,6 +55,9 @@ function authHeaders() {
 function fallo(res, mensaje) {
   if (res.status === 401) {
     throw new Error("Token invalido o expirado (401)");
+  }
+  if (res.status === 403) {
+    throw new Error("No tienes permiso para esta accion (403)");
   }
   throw new Error(`${mensaje} (${res.status})`);
 }
@@ -221,5 +251,53 @@ export async function fetchNotasMateria() {
 export async function fetchBitacora() {
   const res = await fetch(`${API}/bitacora-sync`, { headers: authHeaders() });
   if (!res.ok) fallo(res, "Error al obtener la bitacora de sincronizaciones");
+  return res.json();
+}
+
+/* ------------------------------------------------------------------ */
+/*  Usuarios (solo admin)                                              */
+/* ------------------------------------------------------------------ */
+
+export async function fetchUsuarios() {
+  const res = await fetch(`${API}/usuarios`, { headers: authHeaders() });
+  if (!res.ok) fallo(res, "Error al obtener usuarios");
+  return res.json();
+}
+
+export async function createUsuario({ usuario, contrasena, rol, id_alumno }) {
+  const res = await fetch(`${API}/usuarios`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ usuario, contrasena, rol, id_alumno }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al crear usuario");
+  }
+  return res.json();
+}
+
+export async function updateUsuario(id, { contrasena, rol, id_alumno }) {
+  const res = await fetch(`${API}/usuarios/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ contrasena, rol, id_alumno }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al actualizar usuario");
+  }
+  return res.json();
+}
+
+export async function deleteUsuario(id) {
+  const res = await fetch(`${API}/usuarios/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al eliminar usuario");
+  }
   return res.json();
 }

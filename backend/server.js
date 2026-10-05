@@ -29,11 +29,29 @@ function autenticar(req, res, next) {
     return res.status(401).json({ error: "Token no proporcionado" });
   }
   try {
-    jwt.verify(auth.split(" ")[1], JWT_SECRET);
+    const payload = jwt.verify(auth.split(" ")[1], JWT_SECRET);
+    // tokens antiguos sin rol se asumen admin (solo existian cuentas admin)
+    req.usuario = { ...payload, rol: payload.rol || "admin" };
     next();
   } catch {
     return res.status(401).json({ error: "Token invalido o expirado" });
   }
+}
+
+function requiereRol(...roles) {
+  return (req, res, next) => {
+    if (!req.usuario || !roles.includes(req.usuario.rol)) {
+      return res.status(403).json({ error: "No tienes permiso para esta accion" });
+    }
+    next();
+  };
+}
+
+const soloAdmin = requiereRol("admin");
+
+// Para padres: id_alumno del token, ignorando cualquier filtro del cliente
+function alumnoDelToken(req) {
+  return req.usuario?.rol === "padre" ? req.usuario.id_alumno ?? -1 : null;
 }
 
 app.post("/api/login", async (req, res) => {
@@ -48,8 +66,13 @@ app.post("/api/login", async (req, res) => {
     if (!valid) {
       return res.status(401).json({ error: "Credenciales incorrectas" });
     }
-    const token = jwt.sign({ id: user.id_usuario, usuario: user.usuario }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token });
+    const rol = user.rol || "admin";
+    const token = jwt.sign(
+      { id: user.id_usuario, usuario: user.usuario, rol, id_alumno: user.id_alumno ?? null },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+    res.json({ token, rol, id_alumno: user.id_alumno ?? null });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -63,14 +86,17 @@ app.use("/api", autenticar);
 
 app.get("/api/alumnos", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM alumnos ORDER BY nombre");
+    const soloAlumno = alumnoDelToken(req);
+    const result = soloAlumno
+      ? await pool.query("SELECT * FROM alumnos WHERE id_alumno = $1", [soloAlumno])
+      : await pool.query("SELECT * FROM alumnos ORDER BY nombre");
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post("/api/alumnos", async (req, res) => {
+app.post("/api/alumnos", soloAdmin, async (req, res) => {
   try {
     const { nombre, cuenta, contrasena } = req.body;
     if (!nombre || !cuenta || !contrasena) {
@@ -90,7 +116,7 @@ app.post("/api/alumnos", async (req, res) => {
   }
 });
 
-app.put("/api/alumnos/:id", async (req, res) => {
+app.put("/api/alumnos/:id", soloAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre, cuenta, contrasena } = req.body;
@@ -120,7 +146,7 @@ app.get("/api/materias", async (req, res) => {
   }
 });
 
-app.post("/api/materias", async (req, res) => {
+app.post("/api/materias", soloAdmin, async (req, res) => {
   try {
     const { nombre } = req.body;
     if (!nombre || !nombre.trim()) {
@@ -146,13 +172,19 @@ app.post("/api/materias", async (req, res) => {
 
 app.get("/api/inscripciones", async (req, res) => {
   try {
+    const soloAlumno = alumnoDelToken(req);
     const { alumno_id } = req.query;
-    let query = "SELECT * FROM inscripciones";
     const params = [];
-    if (alumno_id) {
-      query += " WHERE id_alumno = $1";
+    let query = "SELECT * FROM inscripciones";
+    const conditions = [];
+    if (soloAlumno) {
+      params.push(soloAlumno);
+      conditions.push(`id_alumno = $${params.length}`);
+    } else if (alumno_id) {
       params.push(alumno_id);
+      conditions.push(`id_alumno = $${params.length}`);
     }
+    if (conditions.length > 0) query += " WHERE " + conditions.join(" AND ");
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
@@ -160,7 +192,7 @@ app.get("/api/inscripciones", async (req, res) => {
   }
 });
 
-app.post("/api/inscripciones", async (req, res) => {
+app.post("/api/inscripciones", soloAdmin, async (req, res) => {
   try {
     const { id_alumno, id_materia } = req.body;
     const result = await pool.query(
@@ -173,7 +205,7 @@ app.post("/api/inscripciones", async (req, res) => {
   }
 });
 
-app.delete("/api/inscripciones", async (req, res) => {
+app.delete("/api/inscripciones", soloAdmin, async (req, res) => {
   try {
     const { id_alumno, id_materia } = req.body;
     await pool.query(
@@ -186,7 +218,7 @@ app.delete("/api/inscripciones", async (req, res) => {
   }
 });
 
-app.put("/api/inscripciones/lote", async (req, res) => {
+app.put("/api/inscripciones/lote", soloAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     const { id_alumno, materias } = req.body;
@@ -218,11 +250,15 @@ app.put("/api/inscripciones/lote", async (req, res) => {
 
 app.get("/api/progreso", async (req, res) => {
   try {
+    const soloAlumno = alumnoDelToken(req);
     const { alumno_id, materia_id } = req.query;
     let query = "SELECT * FROM progreso";
     const conditions = [];
     const params = [];
-    if (alumno_id) {
+    if (soloAlumno) {
+      params.push(soloAlumno);
+      conditions.push(`id_alumno = $${params.length}`);
+    } else if (alumno_id) {
       params.push(alumno_id);
       conditions.push(`id_alumno = $${params.length}`);
     }
@@ -240,7 +276,7 @@ app.get("/api/progreso", async (req, res) => {
   }
 });
 
-app.post("/api/progreso/lote", async (req, res) => {
+app.post("/api/progreso/lote", soloAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     const { id_alumno, hito, materias } = req.body;
@@ -270,7 +306,7 @@ app.post("/api/progreso/lote", async (req, res) => {
   }
 });
 
-app.post("/api/progreso", async (req, res) => {
+app.post("/api/progreso", soloAdmin, async (req, res) => {
   try {
     const { id_alumno, id_materia, hito, cumplio } = req.body;
     const result = await pool.query(
@@ -287,7 +323,7 @@ app.post("/api/progreso", async (req, res) => {
   }
 });
 
-app.put("/api/progreso/:id", async (req, res) => {
+app.put("/api/progreso/:id", soloAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { cumplio } = req.body;
@@ -304,7 +340,7 @@ app.put("/api/progreso/:id", async (req, res) => {
   }
 });
 
-app.delete("/api/progreso/:id", async (req, res) => {
+app.delete("/api/progreso/:id", soloAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query("DELETE FROM progreso WHERE id_progreso = $1", [id]);
@@ -338,7 +374,7 @@ app.get("/api/horario", async (req, res) => {
   }
 });
 
-app.put("/api/horario", async (req, res) => {
+app.put("/api/horario", soloAdmin, async (req, res) => {
   try {
     const { grid } = req.body;
     if (!Array.isArray(grid)) {
@@ -362,14 +398,17 @@ app.put("/api/horario", async (req, res) => {
 
 app.get("/api/notas-materia", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM notas_materia");
+    const soloAlumno = alumnoDelToken(req);
+    const result = soloAlumno
+      ? await pool.query("SELECT * FROM notas_materia WHERE id_alumno = $1", [soloAlumno])
+      : await pool.query("SELECT * FROM notas_materia");
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get("/api/bitacora-sync", async (req, res) => {
+app.get("/api/bitacora-sync", soloAdmin, async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM bitacora_sync ORDER BY iniciado_en DESC LIMIT 30"
@@ -382,7 +421,7 @@ app.get("/api/bitacora-sync", async (req, res) => {
 
 let sincronizandoEnCurso = false;
 
-app.post("/api/canvas/sync", async (req, res) => {
+app.post("/api/canvas/sync", soloAdmin, async (req, res) => {
   if (sincronizandoEnCurso) {
     return res.status(409).json({ error: "Ya hay una sincronizacion en curso" });
   }
@@ -419,6 +458,112 @@ app.post("/api/canvas/sync", async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     sincronizandoEnCurso = false;
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/*  Usuarios (solo admin)                                              */
+/* ------------------------------------------------------------------ */
+
+const ROLES_VALIDOS = ["admin", "direccion", "padre"];
+
+function validarUsuario({ usuario, contrasena, rol, id_alumno }) {
+  if (!usuario || !String(usuario).trim()) return "El usuario es requerido";
+  if (rol !== undefined && !ROLES_VALIDOS.includes(rol)) return "Rol invalido";
+  if (rol === "padre" && !id_alumno) return "El rol padre requiere un alumno vinculado";
+  if (contrasena !== undefined && contrasena !== null && String(contrasena).length < 4) {
+    return "La contrasena debe tener al menos 4 caracteres";
+  }
+  return null;
+}
+
+app.get("/api/usuarios", soloAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT u.id_usuario, u.usuario, u.rol, u.id_alumno, a.nombre AS alumno_nombre
+       FROM usuarios u
+       LEFT JOIN alumnos a ON a.id_alumno = u.id_alumno
+       ORDER BY u.id_usuario`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/usuarios", soloAdmin, async (req, res) => {
+  try {
+    const { usuario, contrasena, rol = "admin", id_alumno = null } = req.body;
+    const error = validarUsuario({ usuario, contrasena, rol, id_alumno });
+    if (error) return res.status(400).json({ error });
+    if (!contrasena) return res.status(400).json({ error: "La contrasena es requerida" });
+
+    const existe = await pool.query("SELECT id_usuario FROM usuarios WHERE usuario = $1", [
+      String(usuario).trim(),
+    ]);
+    if (existe.rowCount > 0) return res.status(400).json({ error: "Ese usuario ya existe" });
+
+    const hash = await bcrypt.hash(String(contrasena), 10);
+    const result = await pool.query(
+      "INSERT INTO usuarios (usuario, contrasena, rol, id_alumno) VALUES ($1, $2, $3, $4) RETURNING id_usuario, usuario, rol, id_alumno",
+      [String(usuario).trim(), hash, rol, id_alumno]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/usuarios/:id", soloAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { contrasena, rol, id_alumno } = req.body;
+    const propio = Number(id) === Number(req.usuario.id);
+    if (propio && rol !== undefined && rol !== "admin") {
+      return res.status(400).json({ error: "No puedes cambiar tu propio rol" });
+    }
+    const error = validarUsuario({ usuario: "x", rol, id_alumno });
+    if (error) return res.status(400).json({ error });
+
+    const campos = [];
+    const params = [];
+    if (contrasena) {
+      params.push(await bcrypt.hash(String(contrasena), 10));
+      campos.push(`contrasena = $${params.length}`);
+    }
+    if (rol !== undefined) {
+      params.push(rol);
+      campos.push(`rol = $${params.length}`);
+    }
+    if (id_alumno !== undefined) {
+      params.push(id_alumno);
+      campos.push(`id_alumno = $${params.length}`);
+    }
+    if (campos.length === 0) return res.status(400).json({ error: "Nada que actualizar" });
+
+    params.push(id);
+    const result = await pool.query(
+      `UPDATE usuarios SET ${campos.join(", ")} WHERE id_usuario = $${params.length} RETURNING id_usuario, usuario, rol, id_alumno`,
+      params
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Usuario no encontrado" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/usuarios/:id", soloAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (Number(id) === Number(req.usuario.id)) {
+      return res.status(400).json({ error: "No puedes eliminar tu propia cuenta" });
+    }
+    const result = await pool.query("DELETE FROM usuarios WHERE id_usuario = $1", [id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: "Usuario no encontrado" });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
