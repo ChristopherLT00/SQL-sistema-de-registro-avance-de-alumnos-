@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
+import { createPortal } from "react-dom";
 import {
   Users,
   ClipboardList,
@@ -135,56 +136,154 @@ function formatearFecha(iso) {
   }
 }
 
-// Detalle multi-linea con toda la evidencia del registro
-function lineasRegistro({ nota, fechaEntrega, comentario, sincronizado }) {
-  const lineas = [];
-  if (nota != null) lineas.push(`Calificacion: ${nota}`);
+// Card flotante con la evidencia de un registro, en el estilo de la pagina.
+// Se portaliza a document.body para no quedar recortada por los contenedores overflow-auto.
+function ContenidoEvidencia({ base, nota, fechaEntrega, comentario, sincronizado, tituloEliminar }) {
   const entrega = formatearFecha(fechaEntrega);
-  if (entrega) lineas.push(`Entrega: ${entrega}`);
-  if (comentario) {
-    const c = comentario.replace(/\n+/g, " | ");
-    lineas.push(`Comentario: ${c.length > 160 ? c.slice(0, 157) + "..." : c}`);
-  }
   const sync = formatearFecha(sincronizado);
-  if (sync) lineas.push(`Sincronizado: ${sync}`);
-  return lineas;
+  const filas = [
+    ["Calificacion", nota != null ? nota : null],
+    ["Entrega", entrega],
+    ["Sincronizado", sync],
+  ].filter(([, valor]) => valor != null && valor !== "");
+  return (
+    <div className="space-y-2">
+      {base && (
+        <p className={`text-xs font-semibold ${tituloEliminar ? "text-red-600" : "text-gray-900"}`}>{base}</p>
+      )}
+      {filas.length > 0 && (
+        <dl className="space-y-1">
+          {filas.map(([etiqueta, valor]) => (
+            <div key={etiqueta} className="flex items-baseline justify-between gap-3">
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{etiqueta}</dt>
+              <dd className="text-right text-xs text-gray-700">{valor}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {comentario ? (
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Comentario</p>
+          <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-line rounded-lg bg-gray-50 px-2 py-1.5 text-xs leading-relaxed text-gray-600">
+            {comentario}
+          </p>
+        </div>
+      ) : null}
+      {filas.length === 0 && !comentario && (
+        <p className="text-xs text-gray-400">Sin evidencia registrada</p>
+      )}
+    </div>
+  );
 }
 
-function tituloRegistro(ctx) {
-  const lineas = lineasRegistro(ctx);
-  if (lineas.length === 0) return ctx.base;
-  return `${ctx.base}\n${lineas.join("\n")}`;
+function TooltipFlotante({ children, contenido, ancho = 256, delay = 150, className = "block" }) {
+  const [abierto, setAbierto] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0, arriba: true });
+  const anclaRef = useRef(null);
+  const timerRef = useRef(null);
+
+  const ocultar = () => {
+    clearTimeout(timerRef.current);
+    setAbierto(false);
+  };
+
+  const mostrar = () => {
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      const el = anclaRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const mitad = ancho / 2;
+      const x = Math.min(Math.max(r.left + r.width / 2, mitad + 8), window.innerWidth - mitad - 8);
+      // si arriba no cabe la card, se despliega hacia abajo
+      const arriba = r.top > 240;
+      setPos({ x, y: arriba ? r.top - 8 : r.bottom + 8, arriba });
+      setAbierto(true);
+    }, delay);
+  };
+
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  // al hacer scroll o redimensionar la card queda desanclada: se cierra
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const cerrar = () => setAbierto(false);
+    window.addEventListener("scroll", cerrar, true);
+    window.addEventListener("resize", cerrar);
+    return () => {
+      window.removeEventListener("scroll", cerrar, true);
+      window.removeEventListener("resize", cerrar);
+    };
+  }, [abierto]);
+
+  return (
+    <>
+      <span
+        ref={anclaRef}
+        className={className}
+        onMouseEnter={mostrar}
+        onMouseLeave={ocultar}
+        onFocus={mostrar}
+        onBlur={ocultar}
+      >
+        {children}
+      </span>
+      {abierto &&
+        createPortal(
+          <div
+            className="pointer-events-none fixed z-[999]"
+            style={{
+              left: pos.x,
+              top: pos.y,
+              transform: pos.arriba ? "translate(-50%, -100%)" : "translate(-50%, 0)",
+            }}
+          >
+            <div
+              className="rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
+              style={{ width: ancho }}
+            >
+              {contenido}
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
 }
 
 function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincronizado }) {
   const [hover, setHover] = useState(false);
-  const detalle = { nota, fechaEntrega, comentario, sincronizado };
-  const titulo = tituloRegistro({ ...detalle, base: entregado ? "Hito entregado" : "Hito pendiente" });
-  const tituloEliminar = ["Eliminar registro", ...lineasRegistro(detalle)].join("\n");
+  const evidencia = { nota, fechaEntrega, comentario, sincronizado };
+  const base = entregado ? "Hito entregado" : "Hito pendiente";
 
   if (entregado && onClick) {
     return (
-      <button
-        type="button"
-        onClick={onClick}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 transition-colors hover:bg-red-500 cursor-pointer"
-        title={tituloEliminar}
+      <TooltipFlotante
+        contenido={<ContenidoEvidencia base="Eliminar registro" tituloEliminar {...evidencia} />}
       >
-        {hover ? (
-          <X className="h-3 w-3 text-white" strokeWidth={3} />
-        ) : (
-          <Check className="h-3 w-3 text-white" strokeWidth={3} />
-        )}
-      </button>
+        <button
+          type="button"
+          onClick={onClick}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
+          className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 transition-colors hover:bg-red-500 cursor-pointer"
+        >
+          {hover ? (
+            <X className="h-3 w-3 text-white" strokeWidth={3} />
+          ) : (
+            <Check className="h-3 w-3 text-white" strokeWidth={3} />
+          )}
+        </button>
+      </TooltipFlotante>
     );
   }
   if (entregado) {
     return (
-      <div className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600" title={titulo}>
-        <Check className="h-3 w-3 text-white" strokeWidth={3} />
-      </div>
+      <TooltipFlotante contenido={<ContenidoEvidencia base={base} {...evidencia} />}>
+        <div className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600">
+          <Check className="h-3 w-3 text-white" strokeWidth={3} />
+        </div>
+      </TooltipFlotante>
     );
   }
   if (onClick) {
@@ -201,7 +300,11 @@ function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincron
       </button>
     );
   }
-  return <div className="mx-auto h-5 w-5 rounded-full border border-gray-200" title={titulo} />;
+  return (
+    <TooltipFlotante contenido={<ContenidoEvidencia base={base} {...evidencia} />}>
+      <div className="mx-auto h-5 w-5 rounded-full border border-gray-200" />
+    </TooltipFlotante>
+  );
 }
 
 function LoadingScreen() {
@@ -1342,23 +1445,26 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {hitosFiltrados.map((h) => (
-                      <div
+                      <TooltipFlotante
                         key={h.hito}
-                        className="flex items-center gap-1.5 rounded-full border border-gray-100 bg-gray-50 px-2.5 py-1"
-                        title={tituloRegistro({
-                          nota: h.nota,
-                          fechaEntrega: h.fecha_entrega,
-                          comentario: h.comentario,
-                          sincronizado: h.sincronizado_en,
-                          base: `Hito ${h.hito}`,
-                        })}
+                        contenido={
+                          <ContenidoEvidencia
+                            base={`Hito ${h.hito}`}
+                            nota={h.nota}
+                            fechaEntrega={h.fecha_entrega}
+                            comentario={h.comentario}
+                            sincronizado={h.sincronizado_en}
+                          />
+                        }
                       >
-                        <span className="text-xs font-medium text-gray-500">{h.hito}</span>
-                        {h.nota != null && (
-                          <span className="text-xs font-semibold text-blue-600">{h.nota}</span>
-                        )}
-                        <StatusChip entregado={h.cumplio} />
-                      </div>
+                        <div className="flex items-center gap-1.5 rounded-full border border-gray-100 bg-gray-50 px-2.5 py-1">
+                          <span className="text-xs font-medium text-gray-500">{h.hito}</span>
+                          {h.nota != null && (
+                            <span className="text-xs font-semibold text-blue-600">{h.nota}</span>
+                          )}
+                          <StatusChip entregado={h.cumplio} />
+                        </div>
+                      </TooltipFlotante>
                     ))}
                   </div>
                 )}
@@ -1635,18 +1741,40 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
                       <td className="whitespace-nowrap px-2 py-2">{fmt(p.fecha_entrega)}</td>
                       <td className="max-w-xs px-2 py-2">
                         {comentario ? (
-                          <span className="block truncate text-gray-600" title={comentario}>
-                            {comentario.replace(/\n+/g, " | ")}
-                          </span>
+                          <TooltipFlotante
+                            contenido={
+                              <div>
+                                <p className="text-xs font-semibold text-gray-900">Comentario</p>
+                                <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-line text-xs leading-relaxed text-gray-600">
+                                  {comentario}
+                                </p>
+                              </div>
+                            }
+                          >
+                            <span className="block truncate text-gray-600">
+                              {comentario.replace(/\n+/g, " | ")}
+                            </span>
+                          </TooltipFlotante>
                         ) : (
                           <span className="text-gray-300">-</span>
                         )}
                       </td>
                       <td className="max-w-xs px-2 py-2">
                         {p.actividad_canvas ? (
-                          <span className="block truncate text-gray-500" title={p.actividad_canvas}>
-                            {p.actividad_canvas}
-                          </span>
+                          <TooltipFlotante
+                            contenido={
+                              <div>
+                                <p className="text-xs font-semibold text-gray-900">Actividad en Canvas</p>
+                                <p className="mt-1 text-xs leading-relaxed text-gray-600">
+                                  {p.actividad_canvas}
+                                </p>
+                              </div>
+                            }
+                          >
+                            <span className="block truncate text-gray-500">
+                              {p.actividad_canvas}
+                            </span>
+                          </TooltipFlotante>
                         ) : (
                           <span className="text-gray-300">-</span>
                         )}
@@ -1899,18 +2027,18 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
       {reporte && <ReporteSync reporte={reporte} onCerrar={() => setReporte(null)} />}
 
       <div
-        className="overflow-auto rounded-2xl border border-gray-100 bg-white shadow-sm"
+        className="max-h-[70vh] overflow-auto rounded-2xl border border-gray-100 bg-white shadow-sm"
       >
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="sticky left-0 top-0 z-20 w-44 border-b border-r border-gray-100 bg-gray-50 px-3 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+              <th className="sticky left-0 top-0 z-30 w-44 border-b border-r border-gray-100 bg-gray-50 px-3 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 shadow-[inset_-1px_0_0_#f3f4f6,0_2px_4px_rgba(0,0,0,0.06)]">
                 Alumno / Materia
               </th>
               {HITOS.map((h) => (
                 <th
                   key={h}
-                  className="sticky top-0 z-10 border-b border-gray-100 bg-gray-50 px-2 py-3 text-center text-xs font-medium uppercase tracking-wide text-gray-500"
+                  className="sticky top-0 z-20 border-b border-gray-100 bg-gray-50 px-2 py-3 text-center text-xs font-medium uppercase tracking-wide text-gray-500 shadow-[0_2px_4px_rgba(0,0,0,0.06)]"
                 >
                   {h}
                 </th>
