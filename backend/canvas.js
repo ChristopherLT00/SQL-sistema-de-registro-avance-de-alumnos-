@@ -26,6 +26,88 @@ function normalizar(texto) {
     .trim();
 }
 
+/* ---------------------------------------------------------------- */
+/*  Mapeo Canvas -> catalogo de Magnolias                            */
+/* ---------------------------------------------------------------- */
+
+// "Ingles III (CEM)" -> "ingles iii"
+function limpiarCurso(nombre) {
+  return normalizar(nombre).replace(/\s*\([^)]*\)\s*$/, "").trim();
+}
+
+function tokens(texto) {
+  return limpiarCurso(texto).split(" ").filter(Boolean);
+}
+
+function emparejarCurso(nombreCurso, candidatas) {
+  const limpio = limpiarCurso(nombreCurso);
+  for (const m of candidatas) {
+    if (limpiarCurso(m.nombre) === limpio) return m;
+  }
+  // gana el que mas tokens del nombre de la materia aparecen en el curso
+  // (desempate por proporcion, luego por cantidad absoluta: mas especifico)
+  let mejor = null;
+  let mejorScore = 0;
+  let mejorComunes = 0;
+  for (const m of candidatas) {
+    const tc = new Set(tokens(nombreCurso));
+    const tm = tokens(m.nombre);
+    const comunes = tm.filter((t) => tc.has(t)).length;
+    if (tm.length === 0) continue;
+    const score = comunes / tm.length;
+    if (score > 0.6 && (score > mejorScore || (score === mejorScore && comunes > mejorComunes))) {
+      mejorScore = score;
+      mejorComunes = comunes;
+      mejor = m;
+    }
+  }
+  return mejor;
+}
+
+function hitoNumerico(n) {
+  const h = String(Number(n));
+  return HITOS.includes(h) ? h : null;
+}
+
+// Nombre de actividad de Canvas -> hito de Magnolias (null si no aplica).
+// Cubre: "Examen 1er. Parcial", "Actividad evaluable de la semana N",
+// "Actividad integradora - Fase N", "Examen final", variantes.
+function hitoDesdeActividad(nombre) {
+  const n = normalizar(nombre);
+  let m;
+  if ((m = n.match(/examen\s+(1er|primero|primer)\.?\s*parcial/))) return "Parcial 1";
+  if ((m = n.match(/examen\s+(2do|segundo|2)\.?\s*parcial/))) return "Parcial 2";
+  // "Primer Examen Parcial" / "Segundo Examen Parcial"
+  if ((m = n.match(/(primer|primero)\s+examen\s+parcial/))) return "Parcial 1";
+  if ((m = n.match(/(segundo|2do)\s+examen\s+parcial/))) return "Parcial 2";
+  if (/examen\s+final/.test(n)) return "Final";
+  // Ingles: "First partial exam", "Second partial exam", "Final exam"
+  if (/\bfirst\s+partial\s+exam\b/.test(n) || /\bpartial\s+exam\s*1\b/.test(n)) return "Parcial 1";
+  if (/\bsecond\s+partial\s+exam\b/.test(n) || /\bpartial\s+exam\s*2\b/.test(n)) return "Parcial 2";
+  if (/\bfinal\s+exam\b/.test(n)) return "Final";
+  if ((m = n.match(/integradora.*fase\s*(\d+)/))) {
+    const h = `Int ${m[1]}`;
+    return HITOS.includes(h) ? h : null;
+  }
+  // Ingles: "Integrated Activity - Stage N"
+  if ((m = n.match(/integrated\s+activity.*stage\s*(\d+)/))) {
+    const h = `Int ${m[1]}`;
+    return HITOS.includes(h) ? h : null;
+  }
+  if ((m = n.match(/actividad.*semana\s*(\d+)/))) return hitoNumerico(m[1]);
+  if ((m = n.match(/semana\s*(\d+)\s*[:\-]?\s*actividad/))) return hitoNumerico(m[1]);
+  // "Activity of the week N" (Ingles III), "Week 1: activity" (Ingles V)
+  if ((m = n.match(/activity\s+(?:of\s+the\s+)?week\s*(\d+)/))) return hitoNumerico(m[1]);
+  if ((m = n.match(/\bweek\s*(\d+)\s*[:\-]?\s*activity/))) return hitoNumerico(m[1]);
+  if ((m = n.match(/\bsemana\s*(\d+)/))) return hitoNumerico(m[1]);
+  if (/1er\.?\s*parcial|primer\s*parcial/.test(n)) return "Parcial 1";
+  if (/2do\.?\s*parcial|segundo\s*parcial/.test(n)) return "Parcial 2";
+  if (/\bparcial\s*1\b/.test(n)) return "Parcial 1";
+  if (/\bparcial\s*2\b/.test(n)) return "Parcial 2";
+  if (/\bfinal\b/.test(n)) return "Final";
+  return null;
+}
+
 function crearJar() {
   const cookies = new Map();
   return {
@@ -146,7 +228,7 @@ async function apiGet(ruta, jar) {
 /* ---------------------------------------------------------------- */
 
 async function sincronizarAlumno(pool, alumno, datos) {
-  const { cursos, materias } = datos;
+  const { materiasInscritas } = datos;
   const resultado = {
     alumno: alumno.nombre,
     hitos_marcados: 0,
@@ -154,6 +236,7 @@ async function sincronizarAlumno(pool, alumno, datos) {
     global_actualizadas: 0,
     cursos_sin_match: [],
     actividades_sin_match: [],
+    actividades_ignoradas: 0,
   };
 
   const jar = await loginCanvas(alumno.cuenta, alumno.contrasena);
@@ -163,13 +246,10 @@ async function sincronizarAlumno(pool, alumno, datos) {
     jar
   );
 
-  // mapeo materia <-> curso (normalizado)
-  const porNombre = new Map();
-  for (const m of materias) porNombre.set(normalizar(m.nombre), m);
-
+  // mapeo curso -> materia SOLO entre las materias inscritas del alumno
   const cursosMatch = [];
   for (const c of cursosCanvas) {
-    const mat = porNombre.get(normalizar(c.name));
+    const mat = emparejarCurso(c.name, materiasInscritas);
     if (mat) cursosMatch.push({ curso: c, materia: mat });
     else resultado.cursos_sin_match.push(c.name);
   }
@@ -180,17 +260,25 @@ async function sincronizarAlumno(pool, alumno, datos) {
       jar
     );
 
-    // hito <-> assignment
-    const hitoPorNombre = new Map();
-    for (const h of HITOS) hitoPorNombre.set(normalizar(h), h);
-    const assignsMatch = [];
+    // agrupa actividades -> hito (varias actividades pueden caer en un hito)
+    const porHito = new Map();
     for (const a of assigns) {
-      const hito = hitoPorNombre.get(normalizar(a.name));
-      if (hito) assignsMatch.push({ assign: a, hito });
-      else resultado.actividades_sin_match.push(`[${materia.nombre}] ${a.name}`);
+      const n = normalizar(a.name);
+      if (!a.points_possible || n.startsWith("ejercicio")) {
+        // ejercicios/practica sin puntos: se ignoran
+        resultado.actividades_ignoradas++;
+        continue;
+      }
+      const hito = hitoDesdeActividad(a.name);
+      if (!hito) {
+        resultado.actividades_sin_match.push(`[${materia.nombre}] ${a.name}`);
+        continue;
+      }
+      if (!porHito.has(hito)) porHito.set(hito, []);
+      porHito.get(hito).push(a);
     }
 
-    if (assignsMatch.length === 0) continue;
+    if (porHito.size === 0) continue;
 
     // entregas del alumno en este curso
     const subs = await apiGet(
@@ -199,10 +287,14 @@ async function sincronizarAlumno(pool, alumno, datos) {
     );
     const subPorAssign = new Map(subs.map((s) => [s.assignment_id, s]));
 
-    for (const { assign, hito } of assignsMatch) {
-      const s = subPorAssign.get(assign.id);
-      const enviada = !!(s && s.submitted_at);
-      const nota = s && s.score != null ? s.score : null;
+    for (const [hito, acts] of porHito) {
+      let enviada = false;
+      let nota = null;
+      for (const a of acts) {
+        const s = subPorAssign.get(a.id);
+        if (s && s.submitted_at) enviada = true;
+        if (s && s.score != null && (nota == null || s.score > nota)) nota = s.score;
+      }
 
       if (!enviada && nota == null) continue; // nada que registrar
 
@@ -269,21 +361,31 @@ async function sincronizarAlumno(pool, alumno, datos) {
 /* ---------------------------------------------------------------- */
 
 async function sincronizarTodo(pool) {
-  const [alumnosRes, materiasRes] = await Promise.all([
+  const [alumnosRes, materiasRes, inscRes] = await Promise.all([
     pool.query("SELECT id_alumno, nombre, cuenta, contrasena FROM alumnos ORDER BY nombre"),
     pool.query("SELECT id_materia, nombre FROM materias"),
+    pool.query("SELECT id_alumno, id_materia FROM inscripciones"),
   ]);
   const alumnos = alumnosRes.rows;
   const materias = materiasRes.rows;
 
+  const materiasPorAlumno = new Map();
+  for (const i of inscRes.rows) {
+    if (!materiasPorAlumno.has(i.id_alumno)) materiasPorAlumno.set(i.id_alumno, []);
+    const mat = materias.find((m) => m.id_materia === i.id_materia);
+    if (mat) materiasPorAlumno.get(i.id_alumno).push(mat);
+  }
+
   const resumen = {
     alumnos_ok: 0,
     alumnos_error: 0,
+    alumnos_sin_cuenta: 0,
     hitos_marcados: 0,
     calificaciones: 0,
     global_actualizadas: 0,
     cursos_sin_match: [],
     actividades_sin_match: [],
+    actividades_ignoradas: 0,
     errores: [],
     detalles: [],
   };
@@ -295,12 +397,19 @@ async function sincronizarTodo(pool) {
   async function trabajador() {
     while (indice < alumnos.length) {
       const alumno = alumnos[indice++];
+      if (!alumno.cuenta || !alumno.contrasena) {
+        resumen.alumnos_sin_cuenta++;
+        continue;
+      }
       try {
-        const r = await sincronizarAlumno(pool, alumno, { materias });
+        const r = await sincronizarAlumno(pool, alumno, {
+          materiasInscritas: materiasPorAlumno.get(alumno.id_alumno) || [],
+        });
         resumen.alumnos_ok++;
         resumen.hitos_marcados += r.hitos_marcados;
         resumen.calificaciones += r.calificaciones;
         resumen.global_actualizadas += r.global_actualizadas;
+        resumen.actividades_ignoradas += r.actividades_ignoradas;
         for (const c of r.cursos_sin_match)
           if (!resumen.cursos_sin_match.includes(c)) resumen.cursos_sin_match.push(c);
         for (const a of r.actividades_sin_match)
@@ -322,4 +431,13 @@ async function sincronizarTodo(pool) {
   return resumen;
 }
 
-module.exports = { loginCanvas, apiGet, sincronizarAlumno, sincronizarTodo, normalizar, HITOS };
+module.exports = {
+  loginCanvas,
+  apiGet,
+  sincronizarAlumno,
+  sincronizarTodo,
+  normalizar,
+  emparejarCurso,
+  hitoDesdeActividad,
+  HITOS,
+};
