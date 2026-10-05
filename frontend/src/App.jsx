@@ -22,6 +22,7 @@ import {
   Calendar,
   RotateCcw,
   Bell,
+  RefreshCw,
 } from "lucide-react";
 import {
   fetchAlumnos,
@@ -35,6 +36,8 @@ import {
   createMateria,
   syncInscripciones,
   deleteProgreso,
+  syncCanvas,
+  fetchNotasMateria,
   login as apiLogin,
   setToken,
   clearToken,
@@ -91,8 +94,9 @@ function StatusChip({ entregado }) {
   );
 }
 
-function Indicador({ entregado, onClick }) {
+function Indicador({ entregado, onClick, nota }) {
   const [hover, setHover] = useState(false);
+  const titulo = nota != null ? `Calificacion: ${nota}` : entregado ? "Hito entregado" : "Hito pendiente";
 
   if (entregado && onClick) {
     return (
@@ -102,7 +106,7 @@ function Indicador({ entregado, onClick }) {
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 transition-colors hover:bg-red-500 cursor-pointer"
-        title="Eliminar registro"
+        title={nota != null ? `Eliminar · ${titulo}` : "Eliminar registro"}
       >
         {hover ? (
           <X className="h-3 w-3 text-white" strokeWidth={3} />
@@ -114,7 +118,7 @@ function Indicador({ entregado, onClick }) {
   }
   if (entregado) {
     return (
-      <div className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600">
+      <div className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600" title={titulo}>
         <Check className="h-3 w-3 text-white" strokeWidth={3} />
       </div>
     );
@@ -133,7 +137,7 @@ function Indicador({ entregado, onClick }) {
       </button>
     );
   }
-  return <div className="mx-auto h-5 w-5 rounded-full border border-gray-200" />;
+  return <div className="mx-auto h-5 w-5 rounded-full border border-gray-200" title={titulo} />;
 }
 
 function LoadingScreen() {
@@ -1070,7 +1074,7 @@ function VistaRegistro({ alumnos, materias, inscripciones, progreso, onRegistrar
 /*  Vista 3: Avance individual                                         */
 /* ------------------------------------------------------------------ */
 
-function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
+function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria }) {
   const [alumnoId, setAlumnoId] = useState("");
   const [filtro, setFiltro] = useState("todos");
   const [hitoSeleccionado, setHitoSeleccionado] = useState("todos");
@@ -1083,12 +1087,17 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
       .filter((i) => i.id_alumno === Number(alumnoId))
       .map((i) => {
         const materia = materias.find((m) => m.id_materia === i.id_materia);
-        const hitos = HITOS.map((h) => {
-          const registro = progreso.find(
-            (p) => p.id_alumno === i.id_alumno && p.id_materia === i.id_materia && p.hito === h
-          );
-          return { hito: h, cumplio: !!registro?.cumplio, fecha_registro: registro?.fecha_registro };
-        });
+          const hitos = HITOS.map((h) => {
+            const registro = progreso.find(
+              (p) => p.id_alumno === i.id_alumno && p.id_materia === i.id_materia && p.hito === h
+            );
+            return {
+              hito: h,
+              cumplio: !!registro?.cumplio,
+              fecha_registro: registro?.fecha_registro,
+              nota: registro?.calificacion ?? null,
+            };
+          });
         return { materia, hitos };
       });
   }, [alumnoId, inscripciones, materias, progreso]);
@@ -1243,6 +1252,11 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
         <div className="grid gap-4 md:grid-cols-2">
           {datos.map(({ materia, hitos }) => {
             const hitosFiltrados = filtrarHitos(hitos);
+            const global = notasMateria?.find(
+              (n) =>
+                n.id_alumno === Number(alumnoId) &&
+                n.id_materia === materia?.id_materia
+            );
             return (
               <div key={materia?.id_materia} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
@@ -1250,6 +1264,11 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
                     <BookOpen className="h-4 w-4 text-gray-400" />
                     {materia?.nombre}
                   </h3>
+                  {global?.calificacion_global != null && (
+                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                      Global: {Number(global.calificacion_global).toFixed(1)}
+                    </span>
+                  )}
                 </div>
                 {hitosFiltrados.length === 0 ? (
                   <p className="text-sm text-gray-400">No hay hitos en esta categoria.</p>
@@ -1259,8 +1278,12 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
                       <div
                         key={h.hito}
                         className="flex items-center gap-1.5 rounded-full border border-gray-100 bg-gray-50 px-2.5 py-1"
+                        title={h.nota != null ? `Calificacion: ${h.nota}` : undefined}
                       >
                         <span className="text-xs font-medium text-gray-500">{h.hito}</span>
+                        {h.nota != null && (
+                          <span className="text-xs font-semibold text-blue-600">{h.nota}</span>
+                        )}
                         <StatusChip entregado={h.cumplio} />
                       </div>
                     ))}
@@ -1279,12 +1302,76 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso }) {
 /*  Vista 4: Matriz general                                             */
 /* ------------------------------------------------------------------ */
 
+function ReporteSync({ reporte, onCerrar }) {
+  const conErrores = (reporte.errores || []).length > 0;
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Sincronizacion con Canvas</h3>
+          <p className="mt-1 text-sm text-gray-600">
+            {reporte.alumnos_ok ?? 0} alumnos sincronizados
+            {(reporte.alumnos_error ?? 0) > 0 && (
+              <span className="text-red-500">, {reporte.alumnos_error} con error</span>
+            )}
+            {" · "}
+            {reporte.hitos_marcados ?? 0} hitos marcados
+            {" · "}
+            {reporte.calificaciones ?? 0} calificaciones de actividad
+            {" · "}
+            {reporte.global_actualizadas ?? 0} calificaciones globales
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onCerrar}
+          className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {(reporte.errores || []).length > 0 && (
+        <ul className="mt-3 space-y-1 rounded-xl bg-red-50 p-3 text-xs text-red-700">
+          {reporte.errores.map((e, i) => (
+            <li key={i}>
+              <span className="font-semibold">{e.alumno}:</span> {e.error}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {(reporte.cursos_sin_match || []).length > 0 && (
+        <div className="mt-3 text-xs text-gray-500">
+          <span className="font-medium text-gray-700">Cursos sin materia asignada:</span>{" "}
+          {reporte.cursos_sin_match.join(", ")}
+        </div>
+      )}
+
+      {(reporte.actividades_sin_match || []).length > 0 && (
+        <details className="mt-2 text-xs text-gray-500">
+          <summary className="cursor-pointer font-medium text-gray-700">
+            Actividades sin hito asignado ({reporte.actividades_sin_match.length})
+          </summary>
+          <ul className="mt-1 list-inside list-disc pl-2">
+            {reporte.actividades_sin_match.slice(0, 40).map((a, i) => (
+              <li key={i}>{a}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar, onRegistrar }) {
   const [eliminando, setEliminando] = useState(null);
   const [registrando, setRegistrando] = useState(null);
   const [exito, setExito] = useState(null);
   const [guardandoEliminacion, setGuardandoEliminacion] = useState(false);
   const [guardandoRegistro, setGuardandoRegistro] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [reporte, setReporte] = useState(null);
 
   const grupos = useMemo(() => {
     return alumnos.map((alumno) => {
@@ -1299,6 +1386,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar,
             return {
               cumplio: !!registro?.cumplio,
               id: registro?.id_progreso ?? null,
+              nota: registro?.calificacion ?? null,
               hito: h,
               id_alumno: i.id_alumno,
               id_materia: i.id_materia,
@@ -1309,6 +1397,21 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar,
       return { alumno, filas };
     });
   }, [alumnos, materias, inscripciones, progreso]);
+
+  const sincronizar = async () => {
+    setSincronizando(true);
+    setReporte(null);
+    try {
+      const r = await syncCanvas();
+      setReporte(r);
+      await onActualizar();
+      setExito(`Canvas: ${r.hitos_marcados} hitos marcados, ${r.calificaciones} calificaciones.`);
+    } catch (err) {
+      setReporte({ errores: [{ alumno: "Sincronizacion", error: err.message }] });
+    } finally {
+      setSincronizando(false);
+    }
+  };
 
   const confirmarEliminacion = async () => {
     if (!eliminando) return;
@@ -1362,6 +1465,20 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar,
           <div className="flex gap-2">
             <button
               type="button"
+              onClick={sincronizar}
+              disabled={sincronizando}
+              className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+              title="Entrar a Canvas y revisar entregas/calificaciones"
+            >
+              {sincronizando ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              {sincronizando ? "Sincronizando..." : "Sincronizar"}
+            </button>
+            <button
+              type="button"
               onClick={descargarMatrizPDF}
               className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
@@ -1379,6 +1496,8 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar,
           </div>
         )}
       </div>
+
+      {reporte && <ReporteSync reporte={reporte} onCerrar={() => setReporte(null)} />}
 
       <div
         className="overflow-auto rounded-2xl border border-gray-100 bg-white shadow-sm"
@@ -1422,6 +1541,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar,
                         <td key={cIdx} className={`border-b border-gray-100 px-2 py-2 text-center ${bg}`}>
                           <Indicador
                             entregado={celda.cumplio}
+                            nota={celda.nota}
                             onClick={
                               celda.cumplio
                                 ? () =>
@@ -1983,6 +2103,7 @@ export default function App() {
   const [materias, setMaterias] = useState([]);
   const [inscripciones, setInscripciones] = useState([]);
   const [progreso, setProgreso] = useState([]);
+  const [notasMateria, setNotasMateria] = useState([]);
   const [notificacion, setNotificacion] = useState(null);
   const [errorCarga, setErrorCarga] = useState(null);
   const [avisoSesion, setAvisoSesion] = useState("");
@@ -2061,6 +2182,8 @@ export default function App() {
       setInscripciones(i);
       setProgreso(p);
       setErrorCarga(null);
+      // notas_materia puede no existir aun (tabla nueva): no romper la carga
+      fetchNotasMateria().then(setNotasMateria).catch(() => {});
     } catch (err) {
       console.error("Error cargando datos:", err);
       if (err.message.includes("401") || err.message.includes("Token")) {
@@ -2125,6 +2248,7 @@ export default function App() {
   const manejarActualizarProgreso = useCallback(async () => {
     const p = await fetchProgreso();
     setProgreso(p);
+    fetchNotasMateria().then(setNotasMateria).catch(() => {});
   }, []);
 
   if (!autenticado) {
@@ -2228,6 +2352,7 @@ export default function App() {
               materias={materias}
               inscripciones={inscripciones}
               progreso={progreso}
+              notasMateria={notasMateria}
             />
           ) : vista === "horario" ? (
             <VistaHorario />

@@ -198,3 +198,22 @@ export async function deleteProgreso(id) {
   if (!res.ok) fallo(res, "Error al eliminar registro");
   return res.json();
 }
+
+/* ------------------------------------------------------------------ */
+/*  Canvas                                                             */
+/* ------------------------------------------------------------------ */
+
+export async function syncCanvas() {
+  const res = await fetch(`${API}/canvas/sync`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+  });
+  if (!res.ok) fallo(res, "Error al sincronizar con Canvas");
+  return res.json();
+}
+
+export async function fetchNotasMateria() {
+  const res = await fetch(`${API}/notas-materia`, { headers: authHeaders() });
+  if (!res.ok) fallo(res, "Error al obtener calificaciones globales");
+  return res.json();
+}

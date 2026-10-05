@@ -5,6 +5,7 @@ const path = require("path");
 const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { sincronizarTodo } = require("./canvas");
 
 const JWT_SECRET = process.env.JWT_SECRET || "magnolias_calificaciones_2026_secret_key";
 const PORT = process.env.PORT || 3001;
@@ -352,6 +353,36 @@ app.put("/api/horario", async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/*  Sincronizacion Canvas                                              */
+/* ------------------------------------------------------------------ */
+
+app.get("/api/notas-materia", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM notas_materia");
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+let sincronizandoEnCurso = false;
+
+app.post("/api/canvas/sync", async (req, res) => {
+  if (sincronizandoEnCurso) {
+    return res.status(409).json({ error: "Ya hay una sincronizacion en curso" });
+  }
+  sincronizandoEnCurso = true;
+  try {
+    const resumen = await sincronizarTodo(pool);
+    res.json(resumen);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    sincronizandoEnCurso = false;
   }
 });
 
