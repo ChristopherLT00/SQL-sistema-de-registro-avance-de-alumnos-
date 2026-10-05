@@ -70,6 +70,18 @@ const HITOS = [
   "11", "12", "13", "Int 3", "Final",
 ];
 
+// Calificacion global minima aprobatoria (escala 0-100; 7.0 equivale a 70)
+const MIN_APROBATORIA = 70;
+
+function globalEnRiesgo(calificacion) {
+  if (calificacion == null) return false;
+  const v = Number(calificacion);
+  if (Number.isNaN(v)) return false;
+  // admite escala 0-10 (7.0) y 0-100 (70)
+  const v100 = v <= 10 ? v * 10 : v;
+  return v100 < MIN_APROBATORIA;
+}
+
 const VISTAS = [
   { id: "credenciales", nombre: "Credenciales de alumnos", icon: Users },
   { id: "registro", nombre: "Registro semanal", icon: ClipboardList },
@@ -1736,7 +1748,7 @@ function ReporteSync({ reporte, onCerrar }) {
   );
 }
 
-function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar, onRegistrar }) {
+function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria, onActualizar, onRegistrar }) {
   const [eliminando, setEliminando] = useState(null);
   const [registrando, setRegistrando] = useState(null);
   const [exito, setExito] = useState(null);
@@ -1769,9 +1781,21 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar,
           });
           return { id_alumno: i.id_alumno, id_materia: i.id_materia, materiaNombre: materia?.nombre ?? "Materia", celdas };
         });
-      return { alumno, filas };
+
+      // alumno en riesgo: alguna materia con calificacion global < 70
+      const enRiesgo = inscripciones.some(
+        (i) =>
+          i.id_alumno === alumno.id_alumno &&
+          globalEnRiesgo(
+            notasMateria?.find(
+              (n) => n.id_alumno === i.id_alumno && n.id_materia === i.id_materia
+            )?.calificacion_global
+          )
+      );
+
+      return { alumno, filas, enRiesgo };
     });
-  }, [alumnos, materias, inscripciones, progreso]);
+  }, [alumnos, materias, inscripciones, progreso, notasMateria]);
 
   const sincronizar = async () => {
     setSincronizando(true);
@@ -1895,13 +1919,19 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar,
           </thead>
           <tbody>
             {grupos.map((grupo, grupoIdx) => {
-              const bg = grupoIdx % 2 === 0 ? "bg-white" : "bg-blue-50/40";
+              const bg = grupo.enRiesgo
+                ? "bg-red-50"
+                : grupoIdx % 2 === 0
+                  ? "bg-white"
+                  : "bg-blue-50/40";
+              const bgHeader = grupo.enRiesgo ? "bg-red-100" : "bg-gray-50";
+              const textoHeader = grupo.enRiesgo ? "text-red-800" : "text-gray-900";
               return (
                 <Fragment key={grupo.alumno.id_alumno}>
                   <tr>
                     <td
                       colSpan={HITOS.length + 1}
-                      className="sticky left-0 z-10 border-b border-gray-100 bg-gray-50 px-4 py-2.5 text-sm font-semibold text-gray-900"
+                      className={`sticky left-0 z-10 border-b border-gray-100 px-4 py-2.5 text-sm font-semibold ${bgHeader} ${textoHeader}`}
                     >
                       {grupo.alumno.nombre}{" "}
                       <span className="font-normal text-gray-400">cuenta {grupo.alumno.cuenta}</span>
@@ -1950,12 +1980,15 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, onActualizar,
         </table>
       </div>
 
-      <div className="flex items-center gap-6 text-xs text-gray-500">
+      <div className="flex flex-wrap items-center gap-6 text-xs text-gray-500">
         <span className="flex items-center gap-2">
           <Indicador entregado={true} /> Hito entregado
         </span>
         <span className="flex items-center gap-2">
           <Indicador entregado={false} /> Hito pendiente
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-4 w-4 rounded bg-red-100" /> Alumno en riesgo (global &lt; 70)
         </span>
       </div>
 
@@ -2750,6 +2783,7 @@ export default function App() {
               materias={materias}
               inscripciones={inscripciones}
               progreso={progreso}
+              notasMateria={notasMateria}
               onActualizar={manejarActualizarProgreso}
               onRegistrar={manejarRegistro}
             />
