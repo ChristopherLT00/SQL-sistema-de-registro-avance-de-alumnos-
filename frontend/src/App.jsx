@@ -1613,6 +1613,9 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
                     ? b.actividades_sin_match
                     : [];
                   const cursosSin = Array.isArray(b.cursos_sin_match) ? b.cursos_sin_match : [];
+                  const materiasNuevas = Array.isArray(b.materias_creadas_nombres)
+                    ? b.materias_creadas_nombres
+                    : [];
                   const conError = (b.alumnos_error ?? 0) > 0 || errores.length > 0;
                   return (
                     <tr key={b.id} className="border-b border-gray-50 text-gray-700">
@@ -1651,6 +1654,17 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
                               ))}
                             </ul>
                           </details>
+                        )}
+                        {(b.materias_creadas ?? 0) > 0 && (
+                          <div className="mt-0.5 text-xs text-emerald-600">
+                            {b.materias_creadas} materia
+                            {(b.materias_creadas ?? 0) > 1 ? "s" : ""} nueva
+                            {(b.materias_creadas ?? 0) > 1 ? "s" : ""} ({b.inscripciones_creadas ?? 0}{" "}
+                            insc.)
+                            {materiasNuevas.length > 0 && (
+                              <span className="text-gray-500">: {materiasNuevas.join(", ")}</span>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -1859,6 +1873,18 @@ function ReporteSync({ reporte, onCerrar }) {
             {reporte.calificaciones ?? 0} calificaciones de actividad
             {" · "}
             {reporte.global_actualizadas ?? 0} calificaciones globales
+            {(reporte.materias_creadas ?? 0) > 0 && (
+              <span className="text-emerald-600">
+                {" · "}
+                {reporte.materias_creadas} materias nuevas
+              </span>
+            )}
+            {(reporte.inscripciones_creadas ?? 0) > 0 && (
+              <span className="text-emerald-600">
+                {" · "}
+                {reporte.inscripciones_creadas} inscripciones nuevas
+              </span>
+            )}
           </p>
         </div>
         <button
@@ -1878,6 +1904,13 @@ function ReporteSync({ reporte, onCerrar }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {(reporte.materias_creadas_nombres || []).length > 0 && (
+        <div className="mt-3 text-xs text-gray-500">
+          <span className="font-medium text-emerald-700">Materias nuevas creadas:</span>{" "}
+          {reporte.materias_creadas_nombres.join(", ")}
+        </div>
       )}
 
       {(reporte.cursos_sin_match || []).length > 0 && (
@@ -1959,7 +1992,13 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
       const r = await syncCanvas();
       setReporte(r);
       await onActualizar();
-      setExito(`Canvas: ${r.hitos_marcados} hitos marcados, ${r.calificaciones} calificaciones.`);
+      setExito(
+        `Canvas: ${r.hitos_marcados} hitos marcados, ${r.calificaciones} calificaciones.` +
+          ((r.materias_creadas ?? 0) > 0 ? ` ${r.materias_creadas} materias nuevas.` : "") +
+          ((r.inscripciones_creadas ?? 0) > 0
+            ? ` ${r.inscripciones_creadas} inscripciones nuevas.`
+            : "")
+      );
     } catch (err) {
       setReporte({ errores: [{ alumno: "Sincronizacion", error: err.message }] });
     } finally {
@@ -3167,6 +3206,9 @@ export default function App() {
     const p = await fetchProgreso();
     setProgreso(p);
     fetchNotasMateria().then(setNotasMateria).catch(() => {});
+    // la sync de Canvas puede crear materias/inscripciones nuevas
+    fetchMaterias().then(setMaterias).catch(() => {});
+    fetchInscripciones().then(setInscripciones).catch(() => {});
     if (obtenerSesion()?.rol === "admin") {
       fetchBitacora().then(setBitacora).catch(() => {});
     }

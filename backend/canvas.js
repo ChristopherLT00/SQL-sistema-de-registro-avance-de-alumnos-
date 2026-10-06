@@ -39,11 +39,25 @@ function tokens(texto) {
   return limpiarCurso(texto).split(" ").filter(Boolean);
 }
 
-function emparejarCurso(nombreCurso, candidatas) {
+function emparejarCursoExacto(nombreCurso, candidatas) {
   const limpio = limpiarCurso(nombreCurso);
   for (const m of candidatas) {
     if (limpiarCurso(m.nombre) === limpio) return m;
   }
+  return null;
+}
+
+// "Emprendimiento II (CEM)" -> "Emprendimiento II" (conserva acentos/mayusculas)
+function nombreMateriaDesdeCurso(nombreCurso) {
+  return String(nombreCurso || "")
+    .trim()
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .trim();
+}
+
+function emparejarCurso(nombreCurso, candidatas) {
+  const exacta = emparejarCursoExacto(nombreCurso, candidatas);
+  if (exacta) return exacta;
   // gana el que mas tokens del nombre de la materia aparecen en el curso
   // (desempate por proporcion, luego por cantidad absoluta: mas especifico)
   let mejor = null;
@@ -228,12 +242,14 @@ async function apiGet(ruta, jar) {
 /* ---------------------------------------------------------------- */
 
 async function sincronizarAlumno(pool, alumno, datos) {
-  const { materiasInscritas } = datos;
+  const { materiasInscritas, catalogo } = datos;
   const resultado = {
     alumno: alumno.nombre,
     hitos_marcados: 0,
     calificaciones: 0,
     global_actualizadas: 0,
+    materias_creadas: [],
+    inscripciones_creadas: 0,
     cursos_sin_match: [],
     actividades_sin_match: [],
     actividades_ignoradas: 0,
@@ -246,10 +262,29 @@ async function sincronizarAlumno(pool, alumno, datos) {
     jar
   );
 
-  // mapeo curso -> materia SOLO entre las materias inscritas del alumno
+  // mapeo curso -> materia:
+  //   1) exacto entre las materias ya inscritas del alumno
+  //   2) exacto en todo el catalogo (auto-inscribe)
+  //   3) fuzzy entre las inscritas (como siempre)
+  //   4) crea la materia nueva y la auto-inscribe
   const cursosMatch = [];
   for (const c of cursosCanvas) {
-    const mat = emparejarCurso(c.name, materiasInscritas);
+    let mat = emparejarCursoExacto(c.name, materiasInscritas);
+    if (!mat && catalogo) {
+      mat = catalogo.buscarExacta(c.name);
+      if (mat && (await asegurarInscripcion(pool, alumno.id_alumno, mat.id_materia))) {
+        resultado.inscripciones_creadas++;
+      }
+    }
+    if (!mat) mat = emparejarCurso(c.name, materiasInscritas);
+    if (!mat && catalogo) {
+      const r = await catalogo.asegurar(pool, c.name);
+      mat = r.materia;
+      if (r.creada) resultado.materias_creadas.push(mat.nombre);
+      if (await asegurarInscripcion(pool, alumno.id_alumno, mat.id_materia)) {
+        resultado.inscripciones_creadas++;
+      }
+    }
     if (mat) cursosMatch.push({ curso: c, materia: mat });
     else resultado.cursos_sin_match.push(c.name);
   }
@@ -390,6 +425,75 @@ async function sincronizarAlumno(pool, alumno, datos) {
 }
 
 /* ---------------------------------------------------------------- */
+/*  Catalogo compartido: cache + creacion serializada de materias     */
+/* ---------------------------------------------------------------- */
+
+async function asegurarInscripcion(pool, idAlumno, idMateria) {
+  const r = await pool.query(
+    `INSERT INTO inscripciones (id_alumno, id_materia) VALUES ($1, $2)
+     ON CONFLICT DO NOTHING`,
+    [idAlumno, idMateria]
+  );
+  return r.rowCount > 0;
+}
+
+// Catalogo compartido entre los 3 workers concurrentes de sincronizarTodo.
+// La creacion de materias va serializada con un mutex (cadena de promesas)
+// para que dos alumnos con el mismo curso nuevo no dupliquen la fila.
+function crearCatalogo(pool, materias) {
+  const cache = new Map(); // limpiarCurso(nombre) -> materia
+  for (const m of materias) cache.set(limpiarCurso(m.nombre), m);
+
+  let cola = Promise.resolve();
+
+  function buscarExacta(nombreCurso) {
+    return cache.get(limpiarCurso(nombreCurso)) || null;
+  }
+
+  function asegurar(nombreCurso) {
+    const tarea = async () => {
+      const limpio = limpiarCurso(nombreCurso);
+      const ya = cache.get(limpio);
+      if (ya) return { materia: ya, creada: false };
+
+      const nombre =
+        nombreMateriaDesdeCurso(nombreCurso) || String(nombreCurso || "").trim();
+      const ins = await pool.query(
+        `INSERT INTO materias (nombre) VALUES ($1)
+         ON CONFLICT (nombre) DO NOTHING
+         RETURNING id_materia, nombre`,
+        [nombre]
+      );
+      if (ins.rows.length) {
+        const nueva = ins.rows[0];
+        cache.set(limpio, nueva);
+        materias.push(nueva);
+        return { materia: nueva, creada: true };
+      }
+      // nombre ya existia en DB (creado fuera del cache): reusarlo
+      const sel = await pool.query(
+        `SELECT id_materia, nombre FROM materias WHERE nombre = $1`,
+        [nombre]
+      );
+      if (!sel.rows.length) {
+        throw new Error(`No se pudo crear ni encontrar la materia "${nombre}"`);
+      }
+      cache.set(limpio, sel.rows[0]);
+      return { materia: sel.rows[0], creada: false };
+    };
+
+    const resultado = cola.then(tarea, tarea);
+    cola = resultado.then(
+      () => {},
+      () => {}
+    );
+    return resultado;
+  }
+
+  return { buscarExacta, asegurar };
+}
+
+/* ---------------------------------------------------------------- */
 /*  Sincronizacion TOTAL                                             */
 /* ---------------------------------------------------------------- */
 
@@ -401,6 +505,7 @@ async function sincronizarTodo(pool) {
   ]);
   const alumnos = alumnosRes.rows;
   const materias = materiasRes.rows;
+  const catalogo = crearCatalogo(pool, materias);
 
   const materiasPorAlumno = new Map();
   for (const i of inscRes.rows) {
@@ -416,6 +521,9 @@ async function sincronizarTodo(pool) {
     hitos_marcados: 0,
     calificaciones: 0,
     global_actualizadas: 0,
+    materias_creadas: 0,
+    materias_creadas_nombres: [],
+    inscripciones_creadas: 0,
     cursos_sin_match: [],
     actividades_sin_match: [],
     actividades_ignoradas: 0,
@@ -437,12 +545,18 @@ async function sincronizarTodo(pool) {
       try {
         const r = await sincronizarAlumno(pool, alumno, {
           materiasInscritas: materiasPorAlumno.get(alumno.id_alumno) || [],
+          catalogo,
         });
         resumen.alumnos_ok++;
         resumen.hitos_marcados += r.hitos_marcados;
         resumen.calificaciones += r.calificaciones;
         resumen.global_actualizadas += r.global_actualizadas;
         resumen.actividades_ignoradas += r.actividades_ignoradas;
+        resumen.materias_creadas += r.materias_creadas.length;
+        resumen.inscripciones_creadas += r.inscripciones_creadas;
+        for (const n of r.materias_creadas)
+          if (!resumen.materias_creadas_nombres.includes(n))
+            resumen.materias_creadas_nombres.push(n);
         for (const c of r.cursos_sin_match)
           if (!resumen.cursos_sin_match.includes(c)) resumen.cursos_sin_match.push(c);
         for (const a of r.actividades_sin_match)
@@ -470,7 +584,12 @@ module.exports = {
   sincronizarAlumno,
   sincronizarTodo,
   normalizar,
+  limpiarCurso,
   emparejarCurso,
+  emparejarCursoExacto,
+  nombreMateriaDesdeCurso,
+  crearCatalogo,
+  asegurarInscripcion,
   hitoDesdeActividad,
   HITOS,
 };

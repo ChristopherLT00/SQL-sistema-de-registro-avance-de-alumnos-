@@ -430,28 +430,71 @@ app.post("/api/canvas/sync", soloAdmin, async (req, res) => {
   try {
     const resumen = await sincronizarTodo(pool);
     const duracion = Date.now() - iniciado;
+    const bitacora = {
+      duracion_ms: duracion,
+      alumnos_ok: resumen.alumnos_ok,
+      alumnos_error: resumen.alumnos_error,
+      alumnos_sin_cuenta: resumen.alumnos_sin_cuenta,
+      hitos_marcados: resumen.hitos_marcados,
+      calificaciones: resumen.calificaciones,
+      global_actualizadas: resumen.global_actualizadas,
+      actividades_ignoradas: resumen.actividades_ignoradas,
+      cursos_sin_match: JSON.stringify(resumen.cursos_sin_match),
+      actividades_sin_match: JSON.stringify(resumen.actividades_sin_match),
+      errores: JSON.stringify(resumen.errores),
+      materias_creadas: resumen.materias_creadas,
+      inscripciones_creadas: resumen.inscripciones_creadas,
+      materias_creadas_nombres: JSON.stringify(resumen.materias_creadas_nombres),
+    };
     try {
       await pool.query(
         `INSERT INTO bitacora_sync (duracion_ms, alumnos_ok, alumnos_error, alumnos_sin_cuenta,
            hitos_marcados, calificaciones, global_actualizadas, actividades_ignoradas,
-           cursos_sin_match, actividades_sin_match, errores)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+           cursos_sin_match, actividades_sin_match, errores,
+           materias_creadas, inscripciones_creadas, materias_creadas_nombres)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
         [
-          duracion,
-          resumen.alumnos_ok,
-          resumen.alumnos_error,
-          resumen.alumnos_sin_cuenta,
-          resumen.hitos_marcados,
-          resumen.calificaciones,
-          resumen.global_actualizadas,
-          resumen.actividades_ignoradas,
-          JSON.stringify(resumen.cursos_sin_match),
-          JSON.stringify(resumen.actividades_sin_match),
-          JSON.stringify(resumen.errores),
+          bitacora.duracion_ms,
+          bitacora.alumnos_ok,
+          bitacora.alumnos_error,
+          bitacora.alumnos_sin_cuenta,
+          bitacora.hitos_marcados,
+          bitacora.calificaciones,
+          bitacora.global_actualizadas,
+          bitacora.actividades_ignoradas,
+          bitacora.cursos_sin_match,
+          bitacora.actividades_sin_match,
+          bitacora.errores,
+          bitacora.materias_creadas,
+          bitacora.inscripciones_creadas,
+          bitacora.materias_creadas_nombres,
         ]
       );
     } catch (bitErr) {
-      console.error("No se pudo guardar la bitacora de sync:", bitErr.message);
+      // SQL de columnas nuevas puede no haberse corrido: reintentar sin ellas
+      try {
+        await pool.query(
+          `INSERT INTO bitacora_sync (duracion_ms, alumnos_ok, alumnos_error, alumnos_sin_cuenta,
+             hitos_marcados, calificaciones, global_actualizadas, actividades_ignoradas,
+             cursos_sin_match, actividades_sin_match, errores)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            bitacora.duracion_ms,
+            bitacora.alumnos_ok,
+            bitacora.alumnos_error,
+            bitacora.alumnos_sin_cuenta,
+            bitacora.hitos_marcados,
+            bitacora.calificaciones,
+            bitacora.global_actualizadas,
+            bitacora.actividades_ignoradas,
+            bitacora.cursos_sin_match,
+            bitacora.actividades_sin_match,
+            bitacora.errores,
+          ]
+        );
+      } catch (bitErr2) {
+        console.error("No se pudo guardar la bitacora de sync:", bitErr2.message);
+      }
     }
     res.json({ ...resumen, duracion_ms: duracion });
   } catch (err) {
