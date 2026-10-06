@@ -206,6 +206,18 @@ export async function updateAlumno(id, { nombre, cuenta, contrasena }) {
   return res.json();
 }
 
+export async function deleteAlumno(id) {
+  const res = await fetch(`${API}/alumnos/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al eliminar alumno");
+  }
+  return res.json();
+}
+
 export async function registrarAvanceLote(idAlumno, hito, materiasIds) {
   const res = await fetch(`${API}/progreso/lote`, {
     method: "POST",

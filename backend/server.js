@@ -133,6 +133,33 @@ app.put("/api/alumnos/:id", soloAdmin, async (req, res) => {
   }
 });
 
+app.delete("/api/alumnos/:id", soloAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const existe = await client.query(
+      "SELECT id_alumno, nombre FROM alumnos WHERE id_alumno = $1",
+      [id]
+    );
+    if (existe.rowCount === 0) {
+      return res.status(404).json({ error: "Alumno no encontrado" });
+    }
+    await client.query("BEGIN");
+    // progreso e inscripciones no tienen ON DELETE; notas_materia cascada
+    // y usuarios.id_alumno queda en NULL por su FK.
+    await client.query("DELETE FROM progreso WHERE id_alumno = $1", [id]);
+    await client.query("DELETE FROM inscripciones WHERE id_alumno = $1", [id]);
+    await client.query("DELETE FROM alumnos WHERE id_alumno = $1", [id]);
+    await client.query("COMMIT");
+    res.json({ ok: true, nombre: existe.rows[0].nombre });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /*  Materias                                                           */
 /* ------------------------------------------------------------------ */

@@ -28,6 +28,7 @@ import {
   History,
   FileSearch,
   UserCog,
+  Trash2,
 } from "lucide-react";
 import {
   fetchAlumnos,
@@ -38,6 +39,7 @@ import {
   registrarAvanceLote,
   updateAlumno,
   createAlumno,
+  deleteAlumno,
   createMateria,
   syncInscripciones,
   deleteProgreso,
@@ -466,6 +468,8 @@ function VistaCredenciales({ alumnos, onActualizar }) {
   const [visibles, setVisibles] = useState({});
   const [copiado, setCopiado] = useState(null);
   const [editando, setEditando] = useState(null);
+  const [eliminando, setEliminando] = useState(null);
+  const [guardandoEliminacion, setGuardandoEliminacion] = useState(false);
   const [form, setForm] = useState({ nombre: "", cuenta: "", contrasena: "" });
   const [guardando, setGuardando] = useState(false);
   const [exito, setExito] = useState(null);
@@ -516,6 +520,22 @@ function VistaCredenciales({ alumnos, onActualizar }) {
       console.error("Error al actualizar:", err);
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const confirmarEliminacion = async () => {
+    if (!eliminando) return;
+    setGuardandoEliminacion(true);
+    try {
+      await deleteAlumno(eliminando.id_alumno);
+      await onActualizar();
+      setExito(`Alumno "${eliminando.nombre}" eliminado junto con su avance.`);
+      setEliminando(null);
+    } catch (err) {
+      console.error("Error al eliminar alumno:", err);
+      setEliminando(null);
+    } finally {
+      setGuardandoEliminacion(false);
     }
   };
 
@@ -761,6 +781,14 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                     >
                       <Pencil className="h-3 w-3" />
                       Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEliminando(alumno)}
+                      className="inline-flex items-center gap-1 rounded-full bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Eliminar
                     </button>
                   </div>
                 </td>
@@ -1059,6 +1087,45 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                   <Save className="h-4 w-4" />
                 )}
                 Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {eliminando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Eliminar alumno</h3>
+              <button
+                type="button"
+                onClick={() => setEliminando(null)}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600">
+              Se eliminara a <span className="font-medium">{eliminando.nombre}</span> junto con
+              todo su avance, calificaciones e inscripciones. Esta accion no se puede deshacer.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEliminando(null)}
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarEliminacion}
+                disabled={guardandoEliminacion}
+                className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {guardandoEliminacion && <Loader2 className="h-4 w-4 animate-spin" />}
+                Eliminar
               </button>
             </div>
           </div>
