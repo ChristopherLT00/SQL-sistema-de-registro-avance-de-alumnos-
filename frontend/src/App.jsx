@@ -400,29 +400,109 @@ function formatearTamano(bytes) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function TarjetaResumenEntrega({ resumen }) {
+  const textos = {
+    examen_canvas: {
+      titulo: "Examen en línea en Canvas",
+      detalle:
+        "Este hito se contestó dentro de la plataforma, por lo que no lleva archivos adjuntos. Las respuestas y el resultado quedan registrados en Canvas.",
+    },
+    texto: {
+      titulo: "Entrega de texto",
+      detalle: "El alumno contestó escribiendo directamente en Canvas, sin adjuntar archivos.",
+    },
+    enlace: {
+      titulo: "Entrega con enlace",
+      detalle: "El alumno entregó un enlace dentro de Canvas.",
+    },
+    canvas: {
+      titulo: "Entregado en Canvas",
+      detalle: "La actividad fue marcada como entregada en la plataforma, sin archivos adjuntos.",
+    },
+  };
+  const info = textos[resumen.tipo] || textos.canvas;
+  const filas = [
+    resumen.actividad ? ["Actividad", resumen.actividad] : null,
+    resumen.entregado ? ["Entregado", formatearFecha(resumen.entregado)] : null,
+    resumen.duracion_min ? ["Duración", `${resumen.duracion_min} min`] : null,
+    resumen.calificacion != null ? ["Calificación", resumen.calificacion] : null,
+  ].filter(Boolean);
+
+  return (
+    <div className="max-w-md space-y-3">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
+        <FileSearch className="h-6 w-6 text-blue-600" />
+      </div>
+      <p className="text-sm font-semibold text-gray-900">{info.titulo}</p>
+      <p className="text-xs leading-relaxed text-gray-500">{info.detalle}</p>
+      {filas.length > 0 && (
+        <dl className="mx-auto w-full max-w-sm space-y-1 rounded-xl bg-gray-50 px-4 py-3 text-left">
+          {filas.map(([etiqueta, valor]) => (
+            <div key={etiqueta} className="flex items-baseline justify-between gap-3">
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{etiqueta}</dt>
+              <dd className="text-right text-xs text-gray-700">{valor}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {resumen.tipo === "texto" && resumen.texto ? (
+        <p className="max-h-48 overflow-y-auto whitespace-pre-line rounded-xl bg-gray-50 px-4 py-3 text-left text-xs leading-relaxed text-gray-600">
+          {resumen.texto}
+        </p>
+      ) : null}
+      {resumen.tipo === "enlace" && resumen.url ? (
+        <a
+          href={resumen.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-700"
+        >
+          Abrir enlace entregado
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
 function ModalVistaPrevia({ entrega, onCerrar }) {
   const { idAlumno, idMateria, hito, titulo } = entrega;
-  const [estado, setEstado] = useState({ cargando: true, archivos: [], error: null, motivo: null });
+  const [estado, setEstado] = useState({
+    cargando: true,
+    archivos: [],
+    resumen: null,
+    error: null,
+    motivo: null,
+  });
   const [sel, setSel] = useState(0);
   const [cargandoVista, setCargandoVista] = useState(true);
+  const [recarga, setRecarga] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
-    setEstado({ cargando: true, archivos: [], error: null, motivo: null });
+    setEstado({ cargando: true, archivos: [], resumen: null, error: null, motivo: null });
     setSel(0);
+    setCargandoVista(true);
     fetchEntregas({ idAlumno, idMateria, hito })
       .then((d) => {
         if (!cancelado) {
-          setEstado({ cargando: false, archivos: d.archivos || [], motivo: d.motivo || null, error: null });
+          setEstado({
+            cargando: false,
+            archivos: d.archivos || [],
+            resumen: d.entrega || null,
+            motivo: d.motivo || null,
+            error: null,
+          });
         }
       })
       .catch((err) => {
-        if (!cancelado) setEstado({ cargando: false, archivos: [], error: err.message, motivo: null });
+        if (!cancelado) {
+          setEstado({ cargando: false, archivos: [], resumen: null, error: err.message, motivo: null });
+        }
       });
     return () => {
       cancelado = true;
     };
-  }, [idAlumno, idMateria, hito]);
+  }, [idAlumno, idMateria, hito, recarga]);
 
   useEffect(() => {
     const esc = (e) => {
@@ -446,7 +526,7 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
             </div>
           )}
           <iframe
-            key={archivo.vistaUrl}
+            key={`${archivo.vistaUrl}-${recarga}`}
             title={archivo.nombre}
             src={archivo.vistaUrl}
             onLoad={() => setCargandoVista(false)}
@@ -520,6 +600,20 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
             <p className="mt-0.5 truncate text-xs text-gray-500">{titulo}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {archivo?.vistaUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCargandoVista(true);
+                  setRecarga((r) => r + 1);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                title="Pide a Canvas una sesión de visualización nueva y vuelve a abrir el documento"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Recargar vista
+              </button>
+            )}
             {archivo?.descargaUrl && (
               <a
                 href={archivo.descargaUrl}
@@ -586,10 +680,16 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
             </div>
           ) : estado.archivos.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-              <p className="text-sm font-medium text-gray-700">
-                Esta actividad no tiene archivos adjuntos
-              </p>
-              {estado.motivo && <p className="text-xs text-gray-400">{estado.motivo}</p>}
+              {estado.resumen ? (
+                <TarjetaResumenEntrega resumen={estado.resumen} />
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-gray-700">
+                    Esta actividad no tiene archivos adjuntos
+                  </p>
+                  {estado.motivo && <p className="text-xs text-gray-400">{estado.motivo}</p>}
+                </>
+              )}
             </div>
           ) : (
             contenidoVista()

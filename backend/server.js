@@ -484,8 +484,8 @@ app.get("/api/entregas", async (req, res) => {
       return res.json({ archivos: [], motivo: "El alumno no tiene credenciales de Canvas" });
     }
 
-    const archivos = await obtenerAdjuntos(alumno, materiaR.rows[0], String(hito));
-    res.json({ archivos });
+    const { archivos, entrega } = await obtenerAdjuntos(alumno, materiaR.rows[0], String(hito));
+    res.json({ archivos, entrega });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }

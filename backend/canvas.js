@@ -591,7 +591,9 @@ const cacheVistas = new Map();   // id adjunto -> { ts, url }
 const TTL_SESION = 30 * 60 * 1000;
 const TTL_CURSOS = 5 * 60 * 1000;
 const TTL_ADJUNTOS = 60 * 1000;
-const TTL_VISTA = 45 * 60 * 1000;
+// La sesion del visor (JWT) vive ~2 h, pero se sirve muy fresca para que el
+// navegador siempre abra un documento recien creado (evita "sesion caducada").
+const TTL_VISTA = 60 * 1000;
 
 async function jarDeAlumno(alumno) {
   const guardada = sesiones.get(alumno.id_alumno);
@@ -625,97 +627,152 @@ async function cursosDeAlumno(alumno) {
   return cursos;
 }
 
-// preview_url de Canvas -> URL publica del visor DocViewer (caduca ~2 h)
+// Sigue los redirects de preview_url de Canvas hasta la URL del visor DocViewer
+async function seguirPreview(previewUrl, jar) {
+  let actual = previewUrl.startsWith("http") ? previewUrl : BASE + previewUrl;
+  for (let i = 0; i < 4; i++) {
+    const res = await pedir(actual, { headers: { Cookie: jar.header() }, jar });
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location");
+      if (!loc) return null;
+      actual = new URL(loc, actual).href;
+      continue;
+    }
+    return res.status === 200 ? actual : null;
+  }
+  return null;
+}
+
+// El visor valida su sesion contra /1/sessions/<jwt>; si eso no responde 200,
+// Canvas muestra "la sesion de visualizacion ha caducado o es invalida".
+async function sesionDeVisorValida(urlVisor) {
+  try {
+    const u = new URL(urlVisor);
+    const partes = u.pathname.split("/").filter(Boolean); // 1, sessions, <jwt>, view
+    // fuera de un enlace de sesion no hay nada que verificar
+    if (!(partes[0] === "1" && partes[1] === "sessions" && partes[2])) return true;
+    u.pathname = `/1/sessions/${partes[2]}`;
+    u.search = "";
+    const res = await pedir(u.href, { headers: { Accept: "application/json" } });
+    return res.status === 200;
+  } catch {
+    return false;
+  }
+}
+
+// preview_url de Canvas -> URL publica del visor DocViewer (caduca ~2 h).
+// Si la sesion no queda usable devuelve null (el cliente ofrecera solo descarga).
 async function resolverVista(alumno, clave, previewUrl) {
   const guardada = cacheVistas.get(clave);
   if (guardada && Date.now() - guardada.ts < TTL_VISTA) return guardada.url;
 
   let jar = await jarDeAlumno(alumno);
-  let actual = previewUrl.startsWith("http") ? previewUrl : BASE + previewUrl;
-
   for (let intento = 0; intento < 2; intento++) {
-    for (let i = 0; i < 4; i++) {
-      const res = await pedir(actual, { headers: { Cookie: jar.header() }, jar });
-      if (res.status >= 300 && res.status < 400) {
-        const loc = res.headers.get("location");
-        if (!loc) break;
-        actual = new URL(loc, actual).href;
-        continue;
-      }
-      if (res.status === 200) {
-        cacheVistas.set(clave, { ts: Date.now(), url: actual });
-        return actual;
-      }
-      if (res.status === 401 && intento === 0) {
-        sesiones.delete(alumno.id_alumno);
-        jar = await jarDeAlumno(alumno);
-        actual = previewUrl.startsWith("http") ? previewUrl : BASE + previewUrl;
-        break;
-      }
-      break;
+    const url = await seguirPreview(previewUrl, jar);
+    if (url && (await sesionDeVisorValida(url))) {
+      cacheVistas.set(clave, { ts: Date.now(), url });
+      return url;
     }
-    if (cacheVistas.has(clave)) return cacheVistas.get(clave).url;
+    // sesion rechazada: renueva el login del alumno y reintenta una vez
+    sesiones.delete(alumno.id_alumno);
+    jar = await jarDeAlumno(alumno);
   }
   return null;
 }
 
+function quitarEtiquetas(html) {
+  return String(html || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 1500);
+}
+
+function minutosDesde(seg) {
+  if (seg == null) return null;
+  const n = Number(seg);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.max(1, Math.round(n / 60));
+}
+
 /**
  * Archivos adjuntos de la entrega de un alumno en una materia/hito.
- * Devuelve metadata + URL del visor de Canvas + URL de descarga del CDN.
+ * Devuelve { archivos, entrega }:
+ *  - archivos: metadata + URL del visor de Canvas + URL de descarga del CDN
+ *  - entrega:  descripcion cuando NO hay archivos (quiz, texto o enlace)
  * No se almacena ni se transmite ningun archivo por nuestro servidor.
  */
 async function obtenerAdjuntos(alumno, materia, hito) {
   const clave = `${alumno.id_alumno}|${materia.id_materia}|${hito}`;
   const cacheado = cacheAdjuntos.get(clave);
-  if (cacheado && Date.now() - cacheado.ts < TTL_ADJUNTOS) return cacheado.archivos;
 
-  const cursos = await cursosDeAlumno(alumno);
-  const candidatos = cursos.filter(
-    (c) => emparejarCursoExacto(c.name, [materia]) || emparejarCurso(c.name, [materia])
-  );
+  let seleccion = null;
+  let entrega = null;
 
-  const encontrados = [];
-  const vistos = new Set();
-
-  for (const curso of candidatos) {
-    const assigns = await apiGetFresco(
-      alumno,
-      `/api/v1/courses/${curso.id}/assignments?per_page=100`
+  if (cacheado && Date.now() - cacheado.ts < TTL_ADJUNTOS) {
+    seleccion = cacheado.seleccion;
+    entrega = cacheado.entrega;
+  } else {
+    const cursos = await cursosDeAlumno(alumno);
+    const candidatos = cursos.filter(
+      (c) => emparejarCursoExacto(c.name, [materia]) || emparejarCurso(c.name, [materia])
     );
-    // mismos filtros que la sincronizacion: sin puntos o "ejercicio..." no cuentan
-    const acts = assigns.filter((a) => {
-      if (!a.points_possible || normalizar(a.name).startsWith("ejercicio")) return false;
-      return hitoDesdeActividad(a.name) === hito;
-    });
-    if (acts.length === 0) continue;
 
-    const subs = await apiGetFresco(
-      alumno,
-      `/api/v1/courses/${curso.id}/students/submissions?per_page=100&include[]=submission_comments`
-    );
-    const porAssign = new Map(subs.map((s) => [s.assignment_id, s]));
+    const encontrados = [];
+    const vistos = new Set();
+    const candidatasEntrega = [];
 
-    for (const act of acts) {
-      const sub = porAssign.get(act.id);
-      if (!sub || !Array.isArray(sub.attachments)) continue;
-      for (const adj of sub.attachments) {
-        const id = adj.id || adj.url;
-        if (!id || vistos.has(id) || !adj.url) continue;
-        vistos.add(id);
-        encontrados.push({
-          id: String(id),
-          nombre: adj.display_name || adj.filename || "archivo",
-          tipo: adj["content-type"] || adj.content_type || "application/octet-stream",
-          tamano: adj.size ?? null,
-          actividad: act.name.trim(),
-          preview: adj.preview_url || null,
-          descarga: adj.url,
-        });
+    for (const curso of candidatos) {
+      const assigns = await apiGetFresco(
+        alumno,
+        `/api/v1/courses/${curso.id}/assignments?per_page=100`
+      );
+      // mismos filtros que la sincronizacion: sin puntos o "ejercicio..." no cuentan
+      const acts = assigns.filter((a) => {
+        if (!a.points_possible || normalizar(a.name).startsWith("ejercicio")) return false;
+        return hitoDesdeActividad(a.name) === hito;
+      });
+      if (acts.length === 0) continue;
+
+      const subs = await apiGetFresco(
+        alumno,
+        `/api/v1/courses/${curso.id}/students/submissions?per_page=100&include[]=submission_comments`
+      );
+      const porAssign = new Map(subs.map((s) => [s.assignment_id, s]));
+
+      for (const act of acts) {
+        const sub = porAssign.get(act.id);
+        if (!sub) continue;
+        if (sub.submitted_at) candidatasEntrega.push({ curso, act, sub });
+        if (!Array.isArray(sub.attachments)) continue;
+        for (const adj of sub.attachments) {
+          const id = adj.id || adj.url;
+          if (!id || vistos.has(id) || !adj.url) continue;
+          vistos.add(id);
+          encontrados.push({
+            id: String(id),
+            nombre: adj.display_name || adj.filename || "archivo",
+            tipo: adj["content-type"] || adj.content_type || "application/octet-stream",
+            tamano: adj.size ?? null,
+            actividad: act.name.trim(),
+            preview: adj.preview_url || null,
+            descarga: adj.url,
+          });
+        }
       }
     }
+
+    seleccion = encontrados.slice(0, 10);
+
+    if (seleccion.length === 0 && candidatasEntrega.length > 0) {
+      entrega = await describirEntrega(alumno, candidatasEntrega[0]);
+    }
+
+    cacheAdjuntos.set(clave, { ts: Date.now(), seleccion, entrega });
   }
 
-  const seleccion = encontrados.slice(0, 10);
+  // la sesion del visor se resuelve fresca en cada peticion (nunca cacheada)
   const vistas = await Promise.all(
     seleccion.map((a) =>
       a.preview ? resolverVista(alumno, a.id, a.preview).catch(() => null) : Promise.resolve(null)
@@ -731,8 +788,42 @@ async function obtenerAdjuntos(alumno, materia, hito) {
     descargaUrl: a.descarga,
   }));
 
-  cacheAdjuntos.set(clave, { ts: Date.now(), archivos });
-  return archivos;
+  return { archivos, entrega };
+}
+
+// Descripcion de una entrega que no lleva archivos adjuntos (quiz, texto, enlace).
+async function describirEntrega(alumno, { curso, act, sub }) {
+  const base = {
+    actividad: act.name.trim(),
+    tipo: sub.submission_type || "canvas",
+    entregado: sub.submitted_at || null,
+    calificacion: sub.score ?? null,
+  };
+
+  if (act.quiz_id) {
+    let duracion = null;
+    try {
+      const d = await apiGetFresco(
+        alumno,
+        `/api/v1/courses/${curso.id}/quizzes/${act.quiz_id}/submissions`
+      );
+      const q = d && d.quiz_submissions && d.quiz_submissions[0];
+      duracion = q ? minutosDesde(q.time_spent) : null;
+    } catch {
+      duracion = null;
+    }
+    return { ...base, tipo: "examen_canvas", duracion_min: duracion };
+  }
+
+  if (sub.submission_type === "online_text_entry") {
+    return { ...base, tipo: "texto", texto: quitarEtiquetas(sub.body) };
+  }
+
+  if (sub.submission_type === "online_url" && sub.url) {
+    return { ...base, tipo: "enlace", url: sub.url };
+  }
+
+  return { ...base, tipo: "canvas" };
 }
 
 module.exports = {
