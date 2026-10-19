@@ -242,6 +242,25 @@ export async function deleteProgreso(id) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Entregas (archivos enviados a Canvas, vista previa bajo demanda)   */
+/* ------------------------------------------------------------------ */
+
+export async function fetchEntregas({ idAlumno, idMateria, hito }) {
+  const url =
+    `${API}/entregas?id_alumno=${idAlumno}&id_materia=${idMateria}` +
+    `&hito=${encodeURIComponent(hito)}`;
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 403) {
+      throw new Error(data.error || "No tienes permiso para ver esta entrega (403)");
+    }
+    throw new Error(data.error || `Error al consultar la entrega (${res.status})`);
+  }
+  return res.json();
+}
+
+/* ------------------------------------------------------------------ */
 /*  Canvas                                                             */
 /* ------------------------------------------------------------------ */
 

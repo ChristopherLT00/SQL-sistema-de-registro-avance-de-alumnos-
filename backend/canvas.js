@@ -578,11 +578,169 @@ async function sincronizarTodo(pool) {
   return resumen;
 }
 
+/* ---------------------------------------------------------------- */
+/*  Entregas bajo demanda: archivos del alumno por hito              */
+/*  (vista previa sin descargar ni guardar nada)                     */
+/* ---------------------------------------------------------------- */
+
+const sesiones = new Map();      // id_alumno -> { jar, ts }
+const cacheCursos = new Map();   // id_alumno -> { ts, cursos }
+const cacheAdjuntos = new Map(); // alumno|materia|hito -> { ts, archivos }
+const cacheVistas = new Map();   // id adjunto -> { ts, url }
+
+const TTL_SESION = 30 * 60 * 1000;
+const TTL_CURSOS = 5 * 60 * 1000;
+const TTL_ADJUNTOS = 60 * 1000;
+const TTL_VISTA = 45 * 60 * 1000;
+
+async function jarDeAlumno(alumno) {
+  const guardada = sesiones.get(alumno.id_alumno);
+  if (guardada && Date.now() - guardada.ts < TTL_SESION) return guardada.jar;
+  const jar = await loginCanvas(alumno.cuenta, alumno.contrasena);
+  sesiones.set(alumno.id_alumno, { jar, ts: Date.now() });
+  return jar;
+}
+
+// GET de la API de Canvas con re-login automatico si la sesion caduco (401)
+async function apiGetFresco(alumno, ruta) {
+  const jar = await jarDeAlumno(alumno);
+  try {
+    return await apiGet(ruta, jar);
+  } catch (err) {
+    if (!String(err.message).includes("401")) throw err;
+    sesiones.delete(alumno.id_alumno);
+    const nuevo = await jarDeAlumno(alumno);
+    return apiGet(ruta, nuevo);
+  }
+}
+
+async function cursosDeAlumno(alumno) {
+  const guardado = cacheCursos.get(alumno.id_alumno);
+  if (guardado && Date.now() - guardado.ts < TTL_CURSOS) return guardado.cursos;
+  const cursos = await apiGetFresco(
+    alumno,
+    "/api/v1/courses?enrollment_state=active&per_page=100"
+  );
+  cacheCursos.set(alumno.id_alumno, { ts: Date.now(), cursos });
+  return cursos;
+}
+
+// preview_url de Canvas -> URL publica del visor DocViewer (caduca ~2 h)
+async function resolverVista(alumno, clave, previewUrl) {
+  const guardada = cacheVistas.get(clave);
+  if (guardada && Date.now() - guardada.ts < TTL_VISTA) return guardada.url;
+
+  let jar = await jarDeAlumno(alumno);
+  let actual = previewUrl.startsWith("http") ? previewUrl : BASE + previewUrl;
+
+  for (let intento = 0; intento < 2; intento++) {
+    for (let i = 0; i < 4; i++) {
+      const res = await pedir(actual, { headers: { Cookie: jar.header() }, jar });
+      if (res.status >= 300 && res.status < 400) {
+        const loc = res.headers.get("location");
+        if (!loc) break;
+        actual = new URL(loc, actual).href;
+        continue;
+      }
+      if (res.status === 200) {
+        cacheVistas.set(clave, { ts: Date.now(), url: actual });
+        return actual;
+      }
+      if (res.status === 401 && intento === 0) {
+        sesiones.delete(alumno.id_alumno);
+        jar = await jarDeAlumno(alumno);
+        actual = previewUrl.startsWith("http") ? previewUrl : BASE + previewUrl;
+        break;
+      }
+      break;
+    }
+    if (cacheVistas.has(clave)) return cacheVistas.get(clave).url;
+  }
+  return null;
+}
+
+/**
+ * Archivos adjuntos de la entrega de un alumno en una materia/hito.
+ * Devuelve metadata + URL del visor de Canvas + URL de descarga del CDN.
+ * No se almacena ni se transmite ningun archivo por nuestro servidor.
+ */
+async function obtenerAdjuntos(alumno, materia, hito) {
+  const clave = `${alumno.id_alumno}|${materia.id_materia}|${hito}`;
+  const cacheado = cacheAdjuntos.get(clave);
+  if (cacheado && Date.now() - cacheado.ts < TTL_ADJUNTOS) return cacheado.archivos;
+
+  const cursos = await cursosDeAlumno(alumno);
+  const candidatos = cursos.filter(
+    (c) => emparejarCursoExacto(c.name, [materia]) || emparejarCurso(c.name, [materia])
+  );
+
+  const encontrados = [];
+  const vistos = new Set();
+
+  for (const curso of candidatos) {
+    const assigns = await apiGetFresco(
+      alumno,
+      `/api/v1/courses/${curso.id}/assignments?per_page=100`
+    );
+    // mismos filtros que la sincronizacion: sin puntos o "ejercicio..." no cuentan
+    const acts = assigns.filter((a) => {
+      if (!a.points_possible || normalizar(a.name).startsWith("ejercicio")) return false;
+      return hitoDesdeActividad(a.name) === hito;
+    });
+    if (acts.length === 0) continue;
+
+    const subs = await apiGetFresco(
+      alumno,
+      `/api/v1/courses/${curso.id}/students/submissions?per_page=100&include[]=submission_comments`
+    );
+    const porAssign = new Map(subs.map((s) => [s.assignment_id, s]));
+
+    for (const act of acts) {
+      const sub = porAssign.get(act.id);
+      if (!sub || !Array.isArray(sub.attachments)) continue;
+      for (const adj of sub.attachments) {
+        const id = adj.id || adj.url;
+        if (!id || vistos.has(id) || !adj.url) continue;
+        vistos.add(id);
+        encontrados.push({
+          id: String(id),
+          nombre: adj.display_name || adj.filename || "archivo",
+          tipo: adj["content-type"] || adj.content_type || "application/octet-stream",
+          tamano: adj.size ?? null,
+          actividad: act.name.trim(),
+          preview: adj.preview_url || null,
+          descarga: adj.url,
+        });
+      }
+    }
+  }
+
+  const seleccion = encontrados.slice(0, 10);
+  const vistas = await Promise.all(
+    seleccion.map((a) =>
+      a.preview ? resolverVista(alumno, a.id, a.preview).catch(() => null) : Promise.resolve(null)
+    )
+  );
+
+  const archivos = seleccion.map((a, i) => ({
+    nombre: a.nombre,
+    tipo: a.tipo,
+    tamano: a.tamano,
+    actividad: a.actividad,
+    vistaUrl: vistas[i],
+    descargaUrl: a.descarga,
+  }));
+
+  cacheAdjuntos.set(clave, { ts: Date.now(), archivos });
+  return archivos;
+}
+
 module.exports = {
   loginCanvas,
   apiGet,
   sincronizarAlumno,
   sincronizarTodo,
+  obtenerAdjuntos,
   normalizar,
   limpiarCurso,
   emparejarCurso,

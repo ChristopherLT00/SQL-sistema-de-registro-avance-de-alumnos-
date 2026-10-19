@@ -5,7 +5,7 @@ const path = require("path");
 const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { sincronizarTodo } = require("./canvas");
+const { sincronizarTodo, obtenerAdjuntos } = require("./canvas");
 
 const JWT_SECRET = process.env.JWT_SECRET || "magnolias_calificaciones_2026_secret_key";
 const PORT = process.env.PORT || 3001;
@@ -443,6 +443,51 @@ app.get("/api/bitacora-sync", soloAdmin, async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/*  Entregas: archivos enviados a Canvas (vista previa bajo demanda)   */
+/*  No se guarda nada: solo se resuelve la URL del visor y del CDN.    */
+/* ------------------------------------------------------------------ */
+
+app.get("/api/entregas", async (req, res) => {
+  try {
+    const { id_alumno, id_materia, hito } = req.query;
+    if (!id_alumno || !id_materia || !hito) {
+      return res
+        .status(400)
+        .json({ error: "Faltan parametros: id_alumno, id_materia, hito" });
+    }
+    const rol = req.usuario?.rol || "admin";
+    if (rol === "padre" && Number(id_alumno) !== Number(req.usuario.id_alumno)) {
+      return res.status(403).json({ error: "Solo puedes ver las entregas de tu hijo" });
+    }
+
+    const alumnoR = await pool.query(
+      "SELECT id_alumno, nombre, cuenta, contrasena FROM alumnos WHERE id_alumno = $1",
+      [id_alumno]
+    );
+    if (alumnoR.rowCount === 0) {
+      return res.status(404).json({ error: "Alumno no encontrado" });
+    }
+    const materiaR = await pool.query(
+      "SELECT id_materia, nombre FROM materias WHERE id_materia = $1",
+      [id_materia]
+    );
+    if (materiaR.rowCount === 0) {
+      return res.status(404).json({ error: "Materia no encontrada" });
+    }
+
+    const alumno = alumnoR.rows[0];
+    if (!alumno.cuenta || !alumno.contrasena) {
+      return res.json({ archivos: [], motivo: "El alumno no tiene credenciales de Canvas" });
+    }
+
+    const archivos = await obtenerAdjuntos(alumno, materiaR.rows[0], String(hito));
+    res.json({ archivos });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
   }
 });
 

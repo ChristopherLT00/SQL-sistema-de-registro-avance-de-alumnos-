@@ -29,6 +29,7 @@ import {
   FileSearch,
   UserCog,
   Trash2,
+  Paperclip,
 } from "lucide-react";
 import {
   fetchAlumnos,
@@ -55,8 +56,9 @@ import {
   createUsuario,
   updateUsuario,
   deleteUsuario,
+  fetchEntregas,
 } from "./api";
-import { generarPDFAvance, generarPDFMatriz } from "./pdf";
+import { generarPDFAvance, generarPDFMatriz, generarPDFHorario } from "./pdf";
 import { generarExcelAvance, generarExcelMatriz } from "./excel";
 import {
   DIAS,
@@ -114,6 +116,17 @@ const NOMBRES_ROL = {
   padre: "Padre",
 };
 
+// Inicio del ciclo: lunes 7 de septiembre de 2026 (semana 1 de trabajo)
+const INICIO_CICLO = new Date(2026, 8, 7);
+
+function semanaActual() {
+  const hoy = new Date();
+  const aMedianoche = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const dias = Math.floor((aMedianoche - INICIO_CICLO) / 86400000);
+  if (dias < 0) return 0;
+  return Math.floor(dias / 7) + 1;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Componentes auxiliares                                             */
 /* ------------------------------------------------------------------ */
@@ -160,12 +173,12 @@ function formatearFecha(iso) {
 
 // Card flotante con la evidencia de un registro, en el estilo de la pagina.
 // Se portaliza a document.body para no quedar recortada por los contenedores overflow-auto.
-function ContenidoEvidencia({ base, nota, fechaEntrega, comentario, sincronizado, tituloEliminar }) {
-  const entrega = formatearFecha(fechaEntrega);
+function ContenidoEvidencia({ base, nota, fechaEntrega, comentario, sincronizado, tituloEliminar, entrega, entregado, onVerEntrega }) {
+  const fechaEntregaTexto = formatearFecha(fechaEntrega);
   const sync = formatearFecha(sincronizado);
   const filas = [
     ["Calificacion", nota != null ? nota : null],
-    ["Entrega", entrega],
+    ["Entrega", fechaEntregaTexto],
     ["Sincronizado", sync],
   ].filter(([, valor]) => valor != null && valor !== "");
   return (
@@ -194,23 +207,48 @@ function ContenidoEvidencia({ base, nota, fechaEntrega, comentario, sincronizado
       {filas.length === 0 && !comentario && (
         <p className="text-xs text-gray-400">Sin evidencia registrada</p>
       )}
+      {entregado && entrega && onVerEntrega && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onVerEntrega(entrega);
+          }}
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-700"
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+          Ver actividad enviada
+        </button>
+      )}
     </div>
   );
 }
 
-function TooltipFlotante({ children, contenido, ancho = 256, delay = 150, className = "block" }) {
+function TooltipFlotante({ children, contenido, ancho = 256, delay = 150, className = "block", interactivo = false }) {
   const [abierto, setAbierto] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0, arriba: true });
   const anclaRef = useRef(null);
   const timerRef = useRef(null);
+  const timerCierreRef = useRef(null);
 
   const ocultar = () => {
     clearTimeout(timerRef.current);
+    clearTimeout(timerCierreRef.current);
     setAbierto(false);
   };
 
+  // al salir del ancla se cierra con una pequena gracia para poder
+  // moverse hasta la card (necesario cuando la card tiene botones)
+  const programarCierre = () => {
+    clearTimeout(timerCierreRef.current);
+    timerCierreRef.current = setTimeout(() => setAbierto(false), 250);
+  };
+
+  const cancelarCierre = () => clearTimeout(timerCierreRef.current);
+
   const mostrar = () => {
     clearTimeout(timerRef.current);
+    clearTimeout(timerCierreRef.current);
     timerRef.current = setTimeout(() => {
       const el = anclaRef.current;
       if (!el) return;
@@ -224,7 +262,13 @@ function TooltipFlotante({ children, contenido, ancho = 256, delay = 150, classN
     }, delay);
   };
 
-  useEffect(() => () => clearTimeout(timerRef.current), []);
+  useEffect(
+    () => () => {
+      clearTimeout(timerRef.current);
+      clearTimeout(timerCierreRef.current);
+    },
+    []
+  );
 
   // al hacer scroll o redimensionar la card queda desanclada: se cierra
   useEffect(() => {
@@ -244,7 +288,7 @@ function TooltipFlotante({ children, contenido, ancho = 256, delay = 150, classN
         ref={anclaRef}
         className={className}
         onMouseEnter={mostrar}
-        onMouseLeave={ocultar}
+        onMouseLeave={interactivo ? programarCierre : ocultar}
         onFocus={mostrar}
         onBlur={ocultar}
       >
@@ -253,12 +297,14 @@ function TooltipFlotante({ children, contenido, ancho = 256, delay = 150, classN
       {abierto &&
         createPortal(
           <div
-            className="pointer-events-none fixed z-[999]"
+            className={`${interactivo ? "pointer-events-auto" : "pointer-events-none"} fixed z-[999]`}
             style={{
               left: pos.x,
               top: pos.y,
               transform: pos.arriba ? "translate(-50%, -100%)" : "translate(-50%, 0)",
             }}
+            onMouseEnter={interactivo ? cancelarCierre : undefined}
+            onMouseLeave={interactivo ? programarCierre : undefined}
           >
             <div
               className="rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
@@ -273,14 +319,15 @@ function TooltipFlotante({ children, contenido, ancho = 256, delay = 150, classN
   );
 }
 
-function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincronizado }) {
+function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincronizado, entrega, onVerEntrega }) {
   const [hover, setHover] = useState(false);
-  const evidencia = { nota, fechaEntrega, comentario, sincronizado };
+  const evidencia = { nota, fechaEntrega, comentario, sincronizado, entrega, entregado, onVerEntrega };
   const base = entregado ? "Hito entregado" : "Hito pendiente";
 
   if (entregado && onClick) {
     return (
       <TooltipFlotante
+        interactivo
         contenido={<ContenidoEvidencia base="Eliminar registro" tituloEliminar {...evidencia} />}
       >
         <button
@@ -301,7 +348,7 @@ function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincron
   }
   if (entregado) {
     return (
-      <TooltipFlotante contenido={<ContenidoEvidencia base={base} {...evidencia} />}>
+      <TooltipFlotante interactivo contenido={<ContenidoEvidencia base={base} {...evidencia} />}>
         <div className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600">
           <Check className="h-3 w-3 text-white" strokeWidth={3} />
         </div>
@@ -335,6 +382,222 @@ function LoadingScreen() {
       <Loader2 className="h-6 w-6 animate-spin" />
       <p className="text-sm">Cargando datos academicos...</p>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Modal: vista previa de la actividad enviada (archivos de Canvas)   */
+/*  Nada se guarda en el servidor: el visor y la descarga van           */
+/*  directo del CDN de Canvas al navegador.                             */
+/* ------------------------------------------------------------------ */
+
+function formatearTamano(bytes) {
+  if (bytes == null) return null;
+  const n = Number(bytes);
+  if (Number.isNaN(n)) return null;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function ModalVistaPrevia({ entrega, onCerrar }) {
+  const { idAlumno, idMateria, hito, titulo } = entrega;
+  const [estado, setEstado] = useState({ cargando: true, archivos: [], error: null, motivo: null });
+  const [sel, setSel] = useState(0);
+  const [cargandoVista, setCargandoVista] = useState(true);
+
+  useEffect(() => {
+    let cancelado = false;
+    setEstado({ cargando: true, archivos: [], error: null, motivo: null });
+    setSel(0);
+    fetchEntregas({ idAlumno, idMateria, hito })
+      .then((d) => {
+        if (!cancelado) {
+          setEstado({ cargando: false, archivos: d.archivos || [], motivo: d.motivo || null, error: null });
+        }
+      })
+      .catch((err) => {
+        if (!cancelado) setEstado({ cargando: false, archivos: [], error: err.message, motivo: null });
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [idAlumno, idMateria, hito]);
+
+  useEffect(() => {
+    const esc = (e) => {
+      if (e.key === "Escape") onCerrar();
+    };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onCerrar]);
+
+  const archivo = estado.archivos[sel] || null;
+  const tamano = formatearTamano(archivo?.tamano);
+
+  const contenidoVista = () => {
+    if (!archivo) return null;
+    if (archivo.vistaUrl) {
+      return (
+        <div className="relative h-full w-full bg-gray-100">
+          {cargandoVista && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-sm text-gray-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Abriendo documento...
+            </div>
+          )}
+          <iframe
+            key={archivo.vistaUrl}
+            title={archivo.nombre}
+            src={archivo.vistaUrl}
+            onLoad={() => setCargandoVista(false)}
+            className="h-full w-full border-0"
+            allow="fullscreen"
+          />
+        </div>
+      );
+    }
+    if (archivo.tipo?.startsWith("video/") || archivo.tipo?.startsWith("audio/")) {
+      const Etiqueta = archivo.tipo.startsWith("video/") ? "video" : "audio";
+      return (
+        <div className="flex h-full w-full items-center justify-center bg-gray-950 p-4">
+          <Etiqueta src={archivo.descargaUrl} controls className="max-h-full max-w-full" />
+        </div>
+      );
+    }
+    if (archivo.tipo?.startsWith("image/")) {
+      return (
+        <div className="flex h-full w-full items-center justify-center overflow-auto bg-gray-100 p-4">
+          <img src={archivo.descargaUrl} alt={archivo.nombre} className="max-h-full max-w-full object-contain" />
+        </div>
+      );
+    }
+    // tipo sin visor nativo: ficha + descarga
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-6 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
+          <Paperclip className="h-7 w-7 text-gray-400" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-gray-900">{archivo.nombre}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            {archivo.tipo} {tamano ? `· ${tamano}` : ""}
+          </p>
+        </div>
+        <p className="max-w-md text-xs text-gray-400">
+          Este tipo de archivo no se puede mostrar en pantalla. Si necesitas verlo, descárgalo y
+          ábrelo en tu computadora.
+        </p>
+        <a
+          href={archivo.descargaUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-700"
+        >
+          <Download className="h-4 w-4" />
+          Descargar archivo
+        </a>
+      </div>
+    );
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-4"
+      onMouseDown={onCerrar}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <Paperclip className="h-4 w-4 shrink-0 text-blue-600" />
+              Actividad enviada
+            </p>
+            <p className="mt-0.5 truncate text-xs text-gray-500">{titulo}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {archivo?.descargaUrl && (
+              <a
+                href={archivo.descargaUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Descargar
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={onCerrar}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              aria-label="Cerrar"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {estado.archivos.length > 1 && (
+          <div className="flex flex-wrap gap-2 border-b border-gray-100 px-5 py-2.5">
+            {estado.archivos.map((a, i) => (
+              <button
+                key={`${a.nombre}-${i}`}
+                type="button"
+                onClick={() => {
+                  setSel(i);
+                  setCargandoVista(true);
+                }}
+                className={`max-w-xs truncate rounded-full px-3 py-1.5 text-xs font-medium ${
+                  i === sel
+                    ? "bg-gray-900 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+                title={a.nombre}
+              >
+                {a.nombre}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1">
+          {estado.cargando ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-500">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <p className="text-sm">Consultando la entrega en Canvas...</p>
+              <p className="text-xs text-gray-400">Puede tardar unos segundos la primera vez</p>
+            </div>
+          ) : estado.error ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+              <p className="text-sm font-medium text-red-600">No se pudo cargar la entrega</p>
+              <p className="max-w-md text-xs text-gray-500">{estado.error}</p>
+              <button
+                type="button"
+                onClick={onCerrar}
+                className="rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-700"
+              >
+                Cerrar
+              </button>
+            </div>
+          ) : estado.archivos.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+              <p className="text-sm font-medium text-gray-700">
+                Esta actividad no tiene archivos adjuntos
+              </p>
+              {estado.motivo && <p className="text-xs text-gray-400">{estado.motivo}</p>}
+            </div>
+          ) : (
+            contenidoVista()
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1334,6 +1597,10 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
   const [hitoSeleccionado, setHitoSeleccionado] = useState("todos");
   const [hitoDesde, setHitoDesde] = useState(HITOS[0]);
   const [hitoHasta, setHitoHasta] = useState(HITOS[HITOS.length - 1]);
+  const [previa, setPrevia] = useState(null);
+
+  const nombreAlumnoSel =
+    alumnos.find((a) => a.id_alumno === Number(alumnoId))?.nombre ?? "";
 
   // si solo hay un alumno visible (padre), entra directo a su hijo
   useEffect(() => {
@@ -1541,6 +1808,7 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
                     {hitosFiltrados.map((h) => (
                       <TooltipFlotante
                         key={h.hito}
+                        interactivo
                         contenido={
                           <ContenidoEvidencia
                             base={`Hito ${h.hito}`}
@@ -1548,6 +1816,14 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
                             fechaEntrega={h.fecha_entrega}
                             comentario={h.comentario}
                             sincronizado={h.sincronizado_en}
+                            entregado={h.cumplio}
+                            entrega={{
+                              idAlumno: Number(alumnoId),
+                              idMateria: materia?.id_materia,
+                              hito: h.hito,
+                              titulo: `${nombreAlumnoSel} · ${materia?.nombre ?? ""} · Hito ${h.hito}`,
+                            }}
+                            onVerEntrega={setPrevia}
                           />
                         }
                       >
@@ -1567,6 +1843,8 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
           })}
         </div>
       )}
+
+      {previa && <ModalVistaPrevia entrega={previa} onCerrar={() => setPrevia(null)} />}
     </div>
   );
 }
@@ -2011,6 +2289,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
   const [guardandoRegistro, setGuardandoRegistro] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
   const [reporte, setReporte] = useState(null);
+  const [previa, setPrevia] = useState(null);
 
   const grupos = useMemo(() => {
     return alumnos.map((alumno) => {
@@ -2213,6 +2492,13 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
                             fechaEntrega={celda.fecha_entrega}
                             comentario={celda.comentario}
                             sincronizado={celda.sincronizado_en}
+                            entrega={{
+                              idAlumno: celda.id_alumno,
+                              idMateria: celda.id_materia,
+                              hito: celda.hito,
+                              titulo: `${grupo.alumno.nombre} · ${fila.materiaNombre} · Hito ${celda.hito}`,
+                            }}
+                            onVerEntrega={setPrevia}
                             onClick={
                               soloLectura
                                 ? undefined
@@ -2363,6 +2649,8 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
           </div>
         </div>
       )}
+
+      {previa && <ModalVistaPrevia entrega={previa} onCerrar={() => setPrevia(null)} />}
 
       <Toast mensaje={exito} onclose={() => setExito(null)} />
     </div>
@@ -2518,6 +2806,10 @@ function VistaHorario({ soloLectura = false }) {
     setExito("Horario restaurado al original.");
   };
 
+  const descargarHorarioPDF = () => {
+    generarPDFHorario({ grid: horario.grid, dias: DIAS, bloques: BLOQUES });
+  };
+
   const progresoPct =
     estado.tipo === "enClase"
       ? Math.round(((estado.minutosTotales - estado.minutosRestantes) / estado.minutosTotales) * 100)
@@ -2565,28 +2857,38 @@ function VistaHorario({ soloLectura = false }) {
             Horario semanal del ciclo escolar en curso. Los cambios se sincronizan con todos los dispositivos.
           </p>
         </div>
-        {permisoNotif !== "granted" && permisoNotif !== "denied" && (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={pedirPermisoNotif}
-            className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-200"
+            onClick={descargarHorarioPDF}
+            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            <Bell className="h-3.5 w-3.5" />
-            Activar notificaciones
+            <Download className="h-3.5 w-3.5" />
+            PDF
           </button>
-        )}
-        {permisoNotif === "granted" && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Notificaciones activas
-          </span>
-        )}
-        {permisoNotif === "denied" && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-400">
-            <Bell className="h-3.5 w-3.5" />
-            Notificaciones bloqueadas
-          </span>
-        )}
+          {permisoNotif !== "granted" && permisoNotif !== "denied" && (
+            <button
+              type="button"
+              onClick={pedirPermisoNotif}
+              className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-200"
+            >
+              <Bell className="h-3.5 w-3.5" />
+              Activar notificaciones
+            </button>
+          )}
+          {permisoNotif === "granted" && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Notificaciones activas
+            </span>
+          )}
+          {permisoNotif === "denied" && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-400">
+              <Bell className="h-3.5 w-3.5" />
+              Notificaciones bloqueadas
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Card: en curso ahora */}
@@ -3350,9 +3652,15 @@ export default function App() {
       </aside>
 
       <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-gray-100 bg-white px-8 py-6">
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-white px-8 py-6">
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{vistaActual?.nombre}</h1>
-          <p className="text-sm text-gray-400">{fechaHoy}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-1.5 text-sm font-medium text-blue-700">
+              <Calendar className="h-4 w-4" />
+              Semana de trabajo actual: semana {semanaActual()}
+            </span>
+            <p className="text-sm text-gray-400">{fechaHoy}</p>
+          </div>
         </header>
 
         <main className="flex-1 overflow-auto bg-gray-50 px-8 py-8">

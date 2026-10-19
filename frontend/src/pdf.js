@@ -168,3 +168,50 @@ export function generarPDFMatriz({ grupos, hitos }) {
 
   doc.save(`Matriz_General_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
+
+/* ------------------------------------------------------------------ */
+/*  PDF: Horario escolar                                               */
+/* ------------------------------------------------------------------ */
+
+export function generarPDFHorario({ grid, dias, bloques }) {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+  agregarLogo(doc);
+
+  doc.setFontSize(16);
+  doc.text("Horario escolar", 14, 15);
+  doc.setFontSize(11);
+  doc.text(`Fecha: ${fechaStr()}`, 14, 22);
+
+  const hoy = new Date().getDay();
+  const diaHoy = hoy >= 1 && hoy <= 5 ? hoy - 1 : -1;
+
+  const rows = bloques.map((bloque, bIdx) => [
+    `${bloque.inicio} – ${bloque.fin}`,
+    ...dias.map((_, dIdx) => grid?.[bIdx]?.[dIdx] || ""),
+  ]);
+
+  autoTable(doc, {
+    startY: 28,
+    head: [["Hora", ...dias]],
+    body: rows,
+    theme: "grid",
+    styles: { fontSize: 9, cellPadding: 3, halign: "center", valign: "middle" },
+    headStyles: { fillColor: [30, 30, 30] },
+    columnStyles: {
+      0: { halign: "left", cellWidth: 45, fontStyle: "bold" },
+    },
+    margin: { left: 14, right: 14 },
+    didParseCell: (data) => {
+      if (diaHoy < 0 || data.column.index !== diaHoy + 1) return;
+      if (data.section === "head") {
+        data.cell.styles.fillColor = [59, 130, 246];
+        data.cell.styles.textColor = [255, 255, 255];
+      } else if (data.section === "body") {
+        data.cell.styles.fillColor = [219, 234, 254];
+      }
+    },
+  });
+
+  doc.save(`Horario_${new Date().toISOString().slice(0, 10)}.pdf`);
+}

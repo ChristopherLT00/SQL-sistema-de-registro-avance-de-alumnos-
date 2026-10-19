@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
 const S = "magnolias_calificaciones_2026_secret_key";
-const BASE = "http://localhost:3999";
+const BASE = process.env.TEST_BASE || "http://localhost:3999";
 
 const DIR = jwt.sign({ id: 99, usuario: "dir.test", rol: "direccion", id_alumno: null }, S, { expiresIn: "1h" });
 const PADRE = jwt.sign({ id: 98, usuario: "padre.test", rol: "padre", id_alumno: 1 }, S, { expiresIn: "1h" });
