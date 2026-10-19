@@ -643,35 +643,45 @@ async function seguirPreview(previewUrl, jar) {
   return null;
 }
 
-// El visor valida su sesion contra /1/sessions/<jwt>; si eso no responde 200,
-// Canvas muestra "la sesion de visualizacion ha caducado o es invalida".
-async function sesionDeVisorValida(urlVisor) {
+// Consulta la sesion del visor: valida que exista y extrae el PDF convertido.
+// El navegador puede pedir ese PDF directo a Canvas desde cualquier IP.
+async function datosSesionVisor(urlVisor) {
   try {
     const u = new URL(urlVisor);
     const partes = u.pathname.split("/").filter(Boolean); // 1, sessions, <jwt>, view
     // fuera de un enlace de sesion no hay nada que verificar
-    if (!(partes[0] === "1" && partes[1] === "sessions" && partes[2])) return true;
-    u.pathname = `/1/sessions/${partes[2]}`;
-    u.search = "";
-    const res = await pedir(u.href, { headers: { Accept: "application/json" } });
-    return res.status === 200;
+    if (!(partes[0] === "1" && partes[1] === "sessions" && partes[2])) {
+      return { ok: true, pdfUrl: null };
+    }
+    const res = await pedir(`${u.origin}/1/sessions/${partes[2]}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (res.status !== 200) return { ok: false, pdfUrl: null };
+    const datos = await res.json().catch(() => null);
+    const rel = datos && datos.urls && datos.urls.pdf_download;
+    return { ok: true, pdfUrl: rel ? new URL(rel, u.origin).href : null };
   } catch {
-    return false;
+    return { ok: false, pdfUrl: null };
   }
 }
 
-// preview_url de Canvas -> URL publica del visor DocViewer (caduca ~2 h).
-// Si la sesion no queda usable devuelve null (el cliente ofrecera solo descarga).
+// preview_url de Canvas -> { shellUrl, pdfUrl } del visor DocViewer (caduca ~2 h).
+// El iframe del cliente usa pdfUrl (visor PDF nativo del navegador, sin JS de
+// Canvas); shellUrl queda como respaldo. Si la sesion no sirve devuelve null.
 async function resolverVista(alumno, clave, previewUrl) {
   const guardada = cacheVistas.get(clave);
-  if (guardada && Date.now() - guardada.ts < TTL_VISTA) return guardada.url;
+  if (guardada && Date.now() - guardada.ts < TTL_VISTA) return guardada.valor;
 
   let jar = await jarDeAlumno(alumno);
   for (let intento = 0; intento < 2; intento++) {
-    const url = await seguirPreview(previewUrl, jar);
-    if (url && (await sesionDeVisorValida(url))) {
-      cacheVistas.set(clave, { ts: Date.now(), url });
-      return url;
+    const shellUrl = await seguirPreview(previewUrl, jar);
+    if (shellUrl) {
+      const datos = await datosSesionVisor(shellUrl);
+      if (datos.ok) {
+        const valor = { shellUrl, pdfUrl: datos.pdfUrl };
+        cacheVistas.set(clave, { ts: Date.now(), valor });
+        return valor;
+      }
     }
     // sesion rechazada: renueva el login del alumno y reintenta una vez
     sesiones.delete(alumno.id_alumno);
@@ -784,7 +794,9 @@ async function obtenerAdjuntos(alumno, materia, hito) {
     tipo: a.tipo,
     tamano: a.tamano,
     actividad: a.actividad,
-    vistaUrl: vistas[i],
+    // el iframe usa el PDF convertido (visor nativo del navegador); si no
+    // existe se cae al shell del visor de Canvas como antes
+    vistaUrl: vistas[i] ? vistas[i].pdfUrl || vistas[i].shellUrl : null,
     descargaUrl: a.descarga,
   }));
 
