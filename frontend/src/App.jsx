@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Sun,
   Moon,
+  Menu,
   ScrollText,
   History,
   FileSearch,
@@ -3550,6 +3551,7 @@ function VistaUsuarios({ alumnos }) {
 
 export default function App() {
   const [tema, setTema] = useState(temaInicial);
+  const [menuAbierto, setMenuAbierto] = useState(false);
   const [autenticado, setAutenticado] = useState(isLoggedIn);
   const [sesion, setSesion] = useState(null);
   const [vista, setVista] = useState("credenciales");
@@ -3586,6 +3588,43 @@ export default function App() {
     () => setTema((actual) => (actual === "oscuro" ? "claro" : "oscuro")),
     []
   );
+
+  const cerrarMenu = useCallback(() => setMenuAbierto(false), []);
+
+  // Escape cierra el menu lateral
+  useEffect(() => {
+    if (!menuAbierto) return undefined;
+    const alTeclear = (e) => {
+      if (e.key === "Escape") setMenuAbierto(false);
+    };
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, [menuAbierto]);
+
+  // bloquea el scroll del fondo mientras el menu esta abierto
+  useEffect(() => {
+    if (!menuAbierto) return undefined;
+    const anterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = anterior;
+    };
+  }, [menuAbierto]);
+
+  // al pasar a escritorio el sidebar fijo toma el control
+  useEffect(() => {
+    const consulta = window.matchMedia("(min-width: 1024px)");
+    const alCambiar = (e) => {
+      if (e.matches) setMenuAbierto(false);
+    };
+    consulta.addEventListener("change", alCambiar);
+    return () => consulta.removeEventListener("change", alCambiar);
+  }, []);
+
+  // al cambiar de vista se cierra el menu
+  useEffect(() => {
+    setMenuAbierto(false);
+  }, [vista]);
 
   useEffect(() => {
     if (!autenticado) return;
@@ -3695,6 +3734,7 @@ export default function App() {
 
   const manejarLogout = () => {
     clearToken();
+    setMenuAbierto(false);
     setSesion(null);
     setAutenticado(false);
     setVista("credenciales");
@@ -3768,19 +3808,44 @@ export default function App() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-white dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 lg:flex-row">
-      <aside className="flex flex-col border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 lg:w-64 lg:border-b-0 lg:border-r">
-        <div className="flex items-center gap-3 border-b border-gray-100 dark:border-gray-800 px-4 py-4 lg:px-6 lg:py-6">
-          <img
-            src="/magnoliaslogo.jpeg"
-            alt="Magnolias"
-            className="h-10 w-10 rounded-xl object-cover"
-          />
-          <div>
-            <p className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">Calificaciones</p>
-            <p className="text-xs text-gray-400">Ciclo escolar 2026</p>
+      {menuAbierto && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+          onClick={cerrarMenu}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        id="menu-lateral"
+        role={menuAbierto ? "dialog" : undefined}
+        aria-modal={menuAbierto ? "true" : undefined}
+        aria-label="Menu de navegacion"
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col overflow-y-auto border-r border-gray-100 bg-white transition-[transform,visibility] duration-200 dark:border-gray-800 dark:bg-gray-900 lg:static lg:z-auto lg:w-64 lg:translate-x-0 lg:visible lg:transition-none ${
+          menuAbierto ? "visible translate-x-0" : "invisible -translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 px-4 py-4 lg:px-6 lg:py-6">
+          <div className="flex items-center gap-3">
+            <img
+              src="/magnoliaslogo.jpeg"
+              alt="Magnolias"
+              className="h-10 w-10 rounded-xl object-cover"
+            />
+            <div>
+              <p className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">Calificaciones</p>
+              <p className="text-xs text-gray-400">Ciclo escolar 2026</p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={cerrarMenu}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200 lg:hidden"
+            aria-label="Cerrar menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        <nav className="flex overflow-x-auto px-2 py-2 lg:flex-1 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-3 lg:py-3">
+        <nav aria-label="Secciones" className="flex flex-1 flex-col gap-1 px-3 py-3">
           {vistasVisibles.map((v) => {
             const Icono = v.icon;
             const activa = v.id === vistaSegura;
@@ -3788,8 +3853,11 @@ export default function App() {
               <button
                 key={v.id}
                 type="button"
-                onClick={() => setVista(v.id)}
-                className={`flex shrink-0 items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium lg:w-full lg:py-2.5 ${
+                onClick={() => {
+                  setVista(v.id);
+                  cerrarMenu();
+                }}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium ${
                   activa ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
@@ -3799,27 +3867,41 @@ export default function App() {
             );
           })}
         </nav>
-        <div className="flex items-center gap-2 border-t border-gray-100 dark:border-gray-800 px-2 py-2 lg:block lg:px-3 lg:py-3">
-          <div className="min-w-0 flex-1 px-2 lg:mb-2 lg:px-3">
+        <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-3">
+          <div className="mb-2 px-3">
             <p className="truncate text-xs text-gray-400">
               {sesion?.usuario} · {NOMBRES_ROL[rol] ?? rol}
             </p>
           </div>
           <button
             type="button"
-            onClick={manejarLogout}
-            className="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 lg:w-full lg:gap-3 lg:py-2.5"
+            onClick={() => {
+              setMenuAbierto(false);
+              manejarLogout();
+            }}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
           >
             <LogOut className="h-4 w-4 shrink-0" />
-            <span className="whitespace-nowrap lg:hidden">Salir</span>
-            <span className="hidden whitespace-nowrap lg:inline">Cerrar sesion</span>
+            <span className="whitespace-nowrap">Cerrar sesion</span>
           </button>
         </div>
       </aside>
 
       <div className="flex flex-1 flex-col">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-4 lg:gap-4 lg:px-8 lg:py-6">
-          <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100 lg:text-2xl">{vistaActual?.nombre}</h1>
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMenuAbierto(true)}
+              aria-label="Abrir menu"
+              aria-controls="menu-lateral"
+              aria-expanded={menuAbierto}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <h1 className="truncate text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100 lg:text-2xl">{vistaActual?.nombre}</h1>
+          </div>
           <div className="flex flex-wrap items-center gap-2 lg:gap-3">
             <BotonTema tema={tema} onCambiar={alternarTema} />
             <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300 sm:px-4 sm:text-sm">
