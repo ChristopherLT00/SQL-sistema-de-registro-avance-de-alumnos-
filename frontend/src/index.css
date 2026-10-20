@@ -7,6 +7,12 @@ html {
   color-scheme: light;
 }
 
+/* Evita el glow azul de overscroll (Chrome Android) al abrir el menu lateral */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 html.dark {
   color-scheme: dark;
   background-color: #030712;
