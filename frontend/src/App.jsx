@@ -255,11 +255,12 @@ function TooltipFlotante({ children, contenido, ancho = 256, delay = 150, classN
       const el = anclaRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
-      const mitad = ancho / 2;
+      const w = Math.min(ancho, window.innerWidth - 16);
+      const mitad = w / 2;
       const x = Math.min(Math.max(r.left + r.width / 2, mitad + 8), window.innerWidth - mitad - 8);
       // si arriba no cabe la card, se despliega hacia abajo
       const arriba = r.top > 240;
-      setPos({ x, y: arriba ? r.top - 8 : r.bottom + 8, arriba });
+      setPos({ x, y: arriba ? r.top - 8 : r.bottom + 8, arriba, ancho: w });
       setAbierto(true);
     }, delay);
   };
@@ -309,8 +310,8 @@ function TooltipFlotante({ children, contenido, ancho = 256, delay = 150, classN
             onMouseLeave={interactivo ? programarCierre : undefined}
           >
             <div
-              className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 shadow-xl ring-1 ring-black/5 dark:ring-white/10"
-              style={{ width: ancho }}
+              className="max-h-[70vh] overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 shadow-xl ring-1 ring-black/5 dark:ring-white/10"
+              style={{ width: pos.ancho }}
             >
               {contenido}
             </div>
@@ -337,7 +338,7 @@ function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincron
           onClick={onClick}
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
-          className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 transition-colors hover:bg-red-500 cursor-pointer"
+          className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 transition-colors lg:h-5 lg:w-5 hover:bg-red-500 cursor-pointer"
         >
           {hover ? (
             <X className="h-3 w-3 text-white" strokeWidth={3} />
@@ -351,7 +352,7 @@ function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincron
   if (entregado) {
     return (
       <TooltipFlotante interactivo contenido={<ContenidoEvidencia base={base} {...evidencia} />}>
-        <div className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-600">
+        <div className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-blue-600">
           <Check className="h-3 w-3 text-white" strokeWidth={3} />
         </div>
       </TooltipFlotante>
@@ -364,7 +365,7 @@ function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincron
         onClick={onClick}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
-        className="mx-auto flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 transition-colors hover:border-blue-600 hover:bg-blue-600 cursor-pointer"
+        className="mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 transition-colors hover:border-blue-600 hover:bg-blue-600 cursor-pointer"
         title="Registrar hito"
       >
         {hover && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
@@ -373,7 +374,7 @@ function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincron
   }
   return (
     <TooltipFlotante contenido={<ContenidoEvidencia base={base} {...evidencia} />}>
-      <div className="mx-auto h-5 w-5 rounded-full border border-gray-200 dark:border-gray-700" />
+      <div className="mx-auto h-6 w-6 rounded-full border border-gray-200 lg:h-5 lg:w-5 dark:border-gray-700" />
     </TooltipFlotante>
   );
 }
@@ -590,10 +591,10 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
       aria-modal="true"
     >
       <div
-        className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl"
+        className="flex h-[90dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl lg:h-[85vh]"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-gray-100 dark:border-gray-800 px-5 py-4">
+        <div className="flex items-start justify-between gap-3 border-b border-gray-100 dark:border-gray-800 px-4 py-4 sm:gap-4 sm:px-5">
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
               <Paperclip className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
@@ -609,11 +610,12 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
                   setCargandoVista(true);
                   setRecarga((r) => r + 1);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 px-2.5 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 sm:px-3 sm:py-1.5"
                 title="Pide a Canvas una sesión de visualización nueva y vuelve a abrir el documento"
+                aria-label="Recargar vista"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
-                Recargar vista
+                <span className="hidden sm:inline">Recargar vista</span>
               </button>
             )}
             {archivo?.descargaUrl && (
@@ -621,16 +623,17 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
                 href={archivo.descargaUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 px-2.5 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 sm:px-3 sm:py-1.5"
+                aria-label="Descargar archivo"
               >
                 <Download className="h-3.5 w-3.5" />
-                Descargar
+                <span className="hidden sm:inline">Descargar</span>
               </a>
             )}
             <button
               type="button"
               onClick={onCerrar}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200"
               aria-label="Cerrar"
             >
               <X className="h-4 w-4" />
@@ -639,7 +642,7 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
         </div>
 
         {estado.archivos.length > 1 && (
-          <div className="flex flex-wrap gap-2 border-b border-gray-100 dark:border-gray-800 px-5 py-2.5">
+          <div className="flex flex-wrap gap-2 border-b border-gray-100 dark:border-gray-800 px-4 py-2.5 sm:px-5">
             {estado.archivos.map((a, i) => (
               <button
                 key={`${a.nombre}-${i}`}
@@ -730,8 +733,8 @@ function Toast({ mensaje, onclose }) {
   if (!mensaje && animState !== "exiting") return null;
 
   return (
-    <div className={`fixed right-6 top-6 z-50 ${animState === "entering" ? "toast-enter" : animState === "exiting" ? "toast-exit" : ""}`}>
-      <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/70 dark:bg-gray-900/70 px-5 py-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl">
+    <div className={`fixed right-3 top-3 z-50 sm:right-6 sm:top-6 ${animState === "entering" ? "toast-enter" : animState === "exiting" ? "toast-exit" : ""}`}>
+      <div className="flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-2xl border border-white/20 bg-white/70 dark:bg-gray-900/70 px-4 py-3.5 sm:px-5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl">
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/10">
           <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
         </div>
@@ -765,7 +768,7 @@ function BotonTema({ tema, onCambiar }) {
       onClick={onCambiar}
       aria-label={oscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
       title={oscuro ? "Modo claro" : "Modo oscuro"}
-      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white dark:focus:ring-blue-500/30"
+      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 lg:h-9 lg:w-9 transition-colors hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white dark:focus:ring-blue-500/30"
     >
       {oscuro ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </button>
@@ -799,7 +802,7 @@ function LoginForm({ onLogin, aviso, tema, onCambiarTema }) {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
+    <div className="relative flex min-h-dvh items-center justify-center bg-gray-50 px-4 py-10 dark:bg-gray-950">
       <div className="absolute right-5 top-5">
         <BotonTema tema={tema} onCambiar={onCambiarTema} />
       </div>
@@ -1076,7 +1079,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">
             <KeyRound className="h-5 w-5 text-gray-400" />
@@ -1095,8 +1098,8 @@ function VistaCredenciales({ alumnos, onActualizar }) {
           Agregar alumno
         </button>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
-        <table className="w-full border-collapse text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
+        <table className="w-full min-w-[760px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 text-left text-gray-500 dark:text-gray-400">
               <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide">Nombre</th>
@@ -1198,8 +1201,8 @@ function VistaCredenciales({ alumnos, onActualizar }) {
       </div>
 
       {editando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Editar datos del alumno</h3>
               <button
@@ -1266,8 +1269,8 @@ function VistaCredenciales({ alumnos, onActualizar }) {
       )}
 
       {editandoMaterias && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 Asignar materias — {alumnos.find((a) => a.id_alumno === editandoMaterias)?.nombre}
@@ -1362,8 +1365,8 @@ function VistaCredenciales({ alumnos, onActualizar }) {
       )}
 
       {agregando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Agregar nuevo alumno</h3>
               <button
@@ -1493,8 +1496,8 @@ function VistaCredenciales({ alumnos, onActualizar }) {
       )}
 
       {eliminando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Eliminar alumno</h3>
               <button
@@ -1610,7 +1613,7 @@ function VistaRegistro({ alumnos, materias, inscripciones, progreso, onRegistrar
         </p>
       </div>
 
-      <div className="space-y-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 shadow-sm">
+      <div className="space-y-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm sm:p-6">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Alumno</label>
           <select value={alumnoId} onChange={(e) => manejarAlumno(e.target.value)} className={campoSelect}>
@@ -1834,7 +1837,7 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
         <select
           value={hitoSeleccionado}
           onChange={(e) => setHitoSeleccionado(e.target.value)}
-          className="rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
+          className="w-full rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25 sm:w-auto"
         >
           <option value="todos">Todos los hitos</option>
           <option value="rango">Rango de hitos</option>
@@ -1850,7 +1853,7 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
             <select
               value={hitoDesde}
               onChange={(e) => setHitoDesde(e.target.value)}
-              className="rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
+              className="w-full rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25 sm:w-auto"
             >
               <option value="" disabled>Desde</option>
               {HITOS.map((h) => (
@@ -1862,7 +1865,7 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
             <select
               value={hitoHasta}
               onChange={(e) => setHitoHasta(e.target.value)}
-              className="rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
+              className="w-full rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25 sm:w-auto"
             >
               <option value="" disabled>Hasta</option>
               {HITOS.map((h) => (
@@ -2033,7 +2036,7 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
   const alumnosIds = useMemo(() => [...new Set(progreso.map((p) => p.id_alumno))], [progreso]);
 
   const campoSelect =
-    "rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25";
+    "w-full rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2 text-sm text-gray-900 sm:w-auto dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25";
 
   const fmt = (iso) => {
     if (!iso) return "-";
@@ -2064,7 +2067,7 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
       </div>
 
       {/* Bitacora de sincronizaciones */}
-      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 shadow-sm">
+      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm sm:p-5">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
           <History className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           Historial de sincronizaciones
@@ -2075,7 +2078,7 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-800 text-xs uppercase tracking-wide text-gray-400">
                   <th className="px-2 py-2 font-medium">Fecha</th>
@@ -2158,21 +2161,21 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
       </div>
 
       {/* Registros con evidencia */}
-      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 shadow-sm">
+      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
             <FileSearch className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             Registros con evidencia
             <span className="font-normal text-gray-400">({registros.length})</span>
           </h3>
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar alumno, materia, comentario..."
-              className="w-64 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 py-2 pl-9 pr-4 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
+              className="w-full rounded-full border border-gray-200 sm:w-64 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 py-2 pl-9 pr-4 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
             />
           </div>
         </div>
@@ -2213,7 +2216,7 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-800 text-xs uppercase tracking-wide text-gray-400">
                 <th className="px-2 py-2 font-medium">Alumno</th>
@@ -2340,7 +2343,7 @@ function ReporteSync({ reporte, onCerrar }) {
   const conErrores = (reporte.errores || []).length > 0;
   return (
     <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Sincronizacion con Canvas</h3>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
@@ -2529,7 +2532,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">Matriz general</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -2537,7 +2540,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
           </p>
         </div>
         {grupos.length > 0 && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {!soloLectura && (
               <button
                 type="button"
@@ -2579,16 +2582,16 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
       <div
         className="max-h-[70vh] overflow-auto rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm"
       >
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full min-w-[720px] border-collapse text-sm">
           <thead>
             <tr>
-              <th className="sticky left-0 top-0 z-30 w-44 border-b border-r border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-3 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 shadow-[inset_-1px_0_0_#f3f4f6,0_2px_4px_rgba(0,0,0,0.06)] dark:shadow-[inset_-1px_0_0_#1f2937,0_2px_4px_rgba(0,0,0,0.4)]">
+              <th className="sticky left-0 top-0 z-30 w-36 border-b border-r border-gray-100 dark:border-gray-800 lg:w-44 bg-gray-50 dark:bg-gray-950 px-2 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 shadow-[inset_-1px_0_0_#f3f4f6,0_2px_4px_rgba(0,0,0,0.06)] lg:px-3 lg:py-3 dark:shadow-[inset_-1px_0_0_#1f2937,0_2px_4px_rgba(0,0,0,0.4)]">
                 Alumno / Materia
               </th>
               {HITOS.map((h) => (
                 <th
                   key={h}
-                  className="sticky top-0 z-20 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-2 py-3 text-center text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 shadow-[0_2px_4px_rgba(0,0,0,0.06)]"
+                  className="sticky top-0 z-20 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-1.5 py-2.5 text-center text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 shadow-[0_2px_4px_rgba(0,0,0,0.06)] lg:px-2 lg:py-3 lg:text-xs"
                 >
                   {h}
                 </th>
@@ -2609,7 +2612,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
                   <tr>
                     <td
                       colSpan={HITOS.length + 1}
-                      className={`sticky left-0 z-10 border-b border-gray-100 dark:border-gray-800 px-4 py-2.5 text-sm font-semibold ${bgHeader} ${textoHeader}`}
+                      className={`sticky left-0 z-10 border-b border-gray-100 dark:border-gray-800 px-3 py-2 text-xs font-semibold lg:px-4 lg:py-2.5 lg:text-sm ${bgHeader} ${textoHeader}`}
                     >
                       {grupo.alumno.nombre}{" "}
                       <span className="font-normal text-gray-400">cuenta {grupo.alumno.cuenta}</span>
@@ -2617,11 +2620,11 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
                   </tr>
                   {grupo.filas.map((fila) => (
                     <tr key={`${fila.id_alumno}-${fila.id_materia}`} className={`${bg} hover:brightness-95`}>
-                      <td className={`sticky left-0 z-10 border-b border-r border-gray-100 dark:border-gray-800 px-3 py-2 pl-4 text-gray-600 dark:text-gray-300 ${bg}`}>
+                      <td className={`sticky left-0 z-10 border-b border-r border-gray-100 dark:border-gray-800 px-2 py-2 pl-3 text-xs text-gray-600 dark:text-gray-300 lg:px-3 lg:pl-4 lg:text-sm ${bg}`}>
                         {fila.materiaNombre}
                       </td>
                       {fila.celdas.map((celda, cIdx) => (
-                        <td key={cIdx} className={`border-b border-gray-100 dark:border-gray-800 px-2 py-2 text-center ${bg}`}>
+                        <td key={cIdx} className={`border-b border-gray-100 dark:border-gray-800 px-1.5 py-2 text-center lg:px-2 ${bg}`}>
                           <Indicador
                             entregado={celda.cumplio}
                             nota={celda.nota}
@@ -2680,8 +2683,8 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
       </div>
 
       {eliminando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Eliminar registro</h3>
               <button
@@ -2734,8 +2737,8 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
       )}
 
       {registrando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Registrar hito</h3>
               <button
@@ -2853,8 +2856,8 @@ function NotificacionCambioClase({ notificacion, onCerrar }) {
   if (!notificacion && animState !== "exiting") return null;
 
   return (
-    <div className={`fixed left-1/2 top-4 z-[60] -translate-x-1/2 ${animState === "entering" ? "notify-enter" : animState === "exiting" ? "notify-exit" : ""}`}>
-      <div className="flex items-center gap-3.5 rounded-[20px] border border-white/40 bg-white/70 dark:bg-gray-900/70 px-5 py-3.5 shadow-[0_8px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl">
+    <div className={`fixed left-3 right-3 top-3 z-[60] sm:left-1/2 sm:right-auto sm:top-4 sm:-translate-x-1/2 ${animState === "entering" ? "notify-enter" : animState === "exiting" ? "notify-exit" : ""}`}>
+      <div className="flex w-full max-w-[calc(100vw-1.5rem)] items-center gap-3.5 rounded-[20px] border border-white/40 bg-white/70 dark:bg-gray-900/70 px-4 py-3.5 sm:w-auto sm:max-w-md sm:px-5 shadow-[0_8px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
           <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
         </div>
@@ -2983,7 +2986,7 @@ function VistaHorario({ soloLectura = false }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">
             <Calendar className="h-5 w-5 text-gray-400" />
@@ -2993,7 +2996,7 @@ function VistaHorario({ soloLectura = false }) {
             Horario semanal del ciclo escolar en curso. Los cambios se sincronizan con todos los dispositivos.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={descargarHorarioPDF}
@@ -3029,8 +3032,8 @@ function VistaHorario({ soloLectura = false }) {
 
       {/* Card: en curso ahora */}
       <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
-        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-6 py-5 text-white">
-          <div className="flex items-start justify-between">
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-4 py-4 text-white lg:px-6 lg:py-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-widest text-gray-400">En curso ahora</p>
               <p className="mt-1.5 text-2xl font-semibold tracking-tight">{tituloActividad}</p>
@@ -3038,7 +3041,7 @@ function VistaHorario({ soloLectura = false }) {
             </div>
             {!esFinde && (
               <div className="text-right">
-                <p className="text-3xl font-bold tabular-nums tracking-tight">{reloj}</p>
+                <p className="text-2xl font-bold tabular-nums tracking-tight lg:text-3xl">{reloj}</p>
                 <p className="text-xs text-gray-400">{diaNombre}</p>
               </div>
             )}
@@ -3074,7 +3077,7 @@ function VistaHorario({ soloLectura = false }) {
       <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-4">
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Vista semanal</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {editando ? (
               <>
                 <button
@@ -3110,14 +3113,14 @@ function VistaHorario({ soloLectura = false }) {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+          <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 text-left text-gray-500 dark:text-gray-400">
-                <th className="px-5 py-3 text-xs font-medium uppercase tracking-wide">Hora</th>
+                <th className="px-3 py-3 text-xs font-medium uppercase tracking-wide lg:px-5">Hora</th>
                 {DIAS.map((d) => (
                   <th
                     key={d}
-                    className={`px-5 py-3 text-xs font-medium uppercase tracking-wide ${
+                    className={`px-3 py-3 text-xs font-medium uppercase tracking-wide lg:px-5 ${
                       estado.diaIdx === DIAS.indexOf(d) ? "bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300" : ""
                     }`}
                   >
@@ -3132,7 +3135,7 @@ function VistaHorario({ soloLectura = false }) {
                   key={bloque.inicio}
                   className={bIdx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50/50 dark:bg-gray-800/40"}
                 >
-                  <td className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-gray-500 dark:text-gray-400">
+                  <td className="whitespace-nowrap px-3 py-3.5 text-xs font-medium lg:px-5 text-gray-500 dark:text-gray-400">
                     {bloque.inicio} – {bloque.fin}
                   </td>
                   {DIAS.map((d, dIdx) => {
@@ -3146,7 +3149,7 @@ function VistaHorario({ soloLectura = false }) {
                       <td
                         key={d}
                         onClick={() => iniciarEdicion(bIdx, dIdx)}
-                        className={`px-5 py-3.5 text-sm ${
+                        className={`px-3 py-3.5 text-sm lg:px-5 ${
                           editando ? "cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-500/10" : ""
                         } ${esActual ? "bg-blue-50/60 dark:bg-blue-500/15 ring-1 ring-inset ring-blue-200 dark:ring-blue-500/30" : ""}`}
                       >
@@ -3308,7 +3311,7 @@ function VistaUsuarios({ alumnos }) {
 
       <form
         onSubmit={crear}
-        className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 shadow-sm"
+        className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm sm:p-5"
       >
         <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-gray-100">Nueva cuenta</h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -3381,8 +3384,8 @@ function VistaUsuarios({ alumnos }) {
         <div className="rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-2.5 text-sm text-red-600 dark:text-red-400">{error}</div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
+        <table className="w-full min-w-[680px] text-left text-sm">
           <thead>
             <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 text-xs uppercase tracking-wide text-gray-400">
               <th className="px-4 py-3 font-medium">Usuario</th>
@@ -3454,8 +3457,8 @@ function VistaUsuarios({ alumnos }) {
       </div>
 
       {eliminando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Eliminar usuario</h3>
               <button
@@ -3493,8 +3496,8 @@ function VistaUsuarios({ alumnos }) {
       )}
 
       {cambiando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Cambiar contrasena</h3>
               <button
@@ -3764,9 +3767,9 @@ export default function App() {
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-white dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 md:flex-row">
-      <aside className="flex flex-col border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 md:w-64 md:border-b-0 md:border-r">
-        <div className="flex items-center gap-3 border-b border-gray-100 dark:border-gray-800 px-6 py-6">
+    <div className="flex min-h-dvh flex-col bg-white dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 lg:flex-row">
+      <aside className="flex flex-col border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 lg:w-64 lg:border-b-0 lg:border-r">
+        <div className="flex items-center gap-3 border-b border-gray-100 dark:border-gray-800 px-4 py-4 lg:px-6 lg:py-6">
           <img
             src="/magnoliaslogo.jpeg"
             alt="Magnolias"
@@ -3777,7 +3780,7 @@ export default function App() {
             <p className="text-xs text-gray-400">Ciclo escolar 2026</p>
           </div>
         </div>
-        <nav className="flex overflow-x-auto px-3 py-3 md:flex-1 md:flex-col md:gap-1 md:overflow-visible">
+        <nav className="flex overflow-x-auto px-2 py-2 lg:flex-1 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-3 lg:py-3">
           {vistasVisibles.map((v) => {
             const Icono = v.icon;
             const activa = v.id === vistaSegura;
@@ -3786,7 +3789,7 @@ export default function App() {
                 key={v.id}
                 type="button"
                 onClick={() => setVista(v.id)}
-                className={`flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium md:w-full ${
+                className={`flex shrink-0 items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium lg:w-full lg:py-2.5 ${
                   activa ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
@@ -3796,8 +3799,8 @@ export default function App() {
             );
           })}
         </nav>
-        <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-3">
-          <div className="mb-2 px-3">
+        <div className="flex items-center gap-2 border-t border-gray-100 dark:border-gray-800 px-2 py-2 lg:block lg:px-3 lg:py-3">
+          <div className="min-w-0 flex-1 px-2 lg:mb-2 lg:px-3">
             <p className="truncate text-xs text-gray-400">
               {sesion?.usuario} · {NOMBRES_ROL[rol] ?? rol}
             </p>
@@ -3805,28 +3808,30 @@ export default function App() {
           <button
             type="button"
             onClick={manejarLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
+            className="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 lg:w-full lg:gap-3 lg:py-2.5"
           >
             <LogOut className="h-4 w-4 shrink-0" />
-            <span className="whitespace-nowrap">Cerrar sesion</span>
+            <span className="whitespace-nowrap lg:hidden">Salir</span>
+            <span className="hidden whitespace-nowrap lg:inline">Cerrar sesion</span>
           </button>
         </div>
       </aside>
 
       <div className="flex flex-1 flex-col">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 px-8 py-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">{vistaActual?.nombre}</h1>
-          <div className="flex flex-wrap items-center gap-3">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-4 lg:gap-4 lg:px-8 lg:py-6">
+          <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100 lg:text-2xl">{vistaActual?.nombre}</h1>
+          <div className="flex flex-wrap items-center gap-2 lg:gap-3">
             <BotonTema tema={tema} onCambiar={alternarTema} />
-            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-1.5 text-sm font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300 sm:px-4 sm:text-sm">
               <Calendar className="h-4 w-4" />
-              Semana de trabajo actual: semana {semanaActual()}
+              <span className="sm:hidden">Semana {semanaActual()}</span>
+              <span className="hidden sm:inline">Semana de trabajo actual: semana {semanaActual()}</span>
             </span>
-            <p className="text-sm text-gray-400">{fechaHoy}</p>
+            <p className="hidden text-sm text-gray-400 sm:block">{fechaHoy}</p>
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-950 px-8 py-8">
+        <main className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-950 px-4 py-5 lg:px-8 lg:py-8">
           {cargando ? (
             <LoadingScreen />
           ) : errorCarga ? (
