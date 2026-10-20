@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Magnolias - Control Estudiantil</title>
+    <script>
+      (function () {
+        try {
+          var tema = localStorage.getItem("magnolias-tema");
+          if (tema !== "claro" && tema !== "oscuro") {
+            tema = window.matchMedia("(prefers-color-scheme: dark)").matches ? "oscuro" : "claro";
+          }
+          var oscuro = tema === "oscuro";
+          document.documentElement.classList.toggle("dark", oscuro);
+          document.documentElement.style.colorScheme = oscuro ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

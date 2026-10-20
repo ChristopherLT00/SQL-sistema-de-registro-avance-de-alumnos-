@@ -24,6 +24,8 @@ import {
   RotateCcw,
   Bell,
   RefreshCw,
+  Sun,
+  Moon,
   ScrollText,
   History,
   FileSearch,
@@ -134,14 +136,14 @@ function semanaActual() {
 function StatusChip({ entregado }) {
   if (entregado) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 dark:bg-green-500/15 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:text-green-300">
         <Check className="h-3 w-3" strokeWidth={2.5} />
         Entregado
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-400">
+    <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-2.5 py-0.5 text-xs font-medium text-gray-400">
       Pendiente
     </span>
   );
@@ -184,14 +186,14 @@ function ContenidoEvidencia({ base, nota, fechaEntrega, comentario, sincronizado
   return (
     <div className="space-y-2">
       {base && (
-        <p className={`text-xs font-semibold ${tituloEliminar ? "text-red-600" : "text-gray-900"}`}>{base}</p>
+        <p className={`text-xs font-semibold ${tituloEliminar ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-gray-100"}`}>{base}</p>
       )}
       {filas.length > 0 && (
         <dl className="space-y-1">
           {filas.map(([etiqueta, valor]) => (
             <div key={etiqueta} className="flex items-baseline justify-between gap-3">
               <dt className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{etiqueta}</dt>
-              <dd className="text-right text-xs text-gray-700">{valor}</dd>
+              <dd className="text-right text-xs text-gray-700 dark:text-gray-300">{valor}</dd>
             </div>
           ))}
         </dl>
@@ -199,7 +201,7 @@ function ContenidoEvidencia({ base, nota, fechaEntrega, comentario, sincronizado
       {comentario ? (
         <div>
           <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Comentario</p>
-          <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-line rounded-lg bg-gray-50 px-2 py-1.5 text-xs leading-relaxed text-gray-600">
+          <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-line rounded-lg bg-gray-50 dark:bg-gray-950 px-2 py-1.5 text-xs leading-relaxed text-gray-600 dark:text-gray-300">
             {comentario}
           </p>
         </div>
@@ -214,7 +216,7 @@ function ContenidoEvidencia({ base, nota, fechaEntrega, comentario, sincronizado
             e.stopPropagation();
             onVerEntrega(entrega);
           }}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-700"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-gray-900 dark:bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-700 dark:hover:bg-blue-500"
         >
           <Paperclip className="h-3.5 w-3.5" />
           Ver actividad enviada
@@ -307,7 +309,7 @@ function TooltipFlotante({ children, contenido, ancho = 256, delay = 150, classN
             onMouseLeave={interactivo ? programarCierre : undefined}
           >
             <div
-              className="rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
+              className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 shadow-xl ring-1 ring-black/5 dark:ring-white/10"
               style={{ width: ancho }}
             >
               {contenido}
@@ -362,7 +364,7 @@ function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincron
         onClick={onClick}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
-        className="mx-auto flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white transition-colors hover:border-blue-600 hover:bg-blue-600 cursor-pointer"
+        className="mx-auto flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 transition-colors hover:border-blue-600 hover:bg-blue-600 cursor-pointer"
         title="Registrar hito"
       >
         {hover && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
@@ -371,7 +373,7 @@ function Indicador({ entregado, onClick, nota, fechaEntrega, comentario, sincron
   }
   return (
     <TooltipFlotante contenido={<ContenidoEvidencia base={base} {...evidencia} />}>
-      <div className="mx-auto h-5 w-5 rounded-full border border-gray-200" />
+      <div className="mx-auto h-5 w-5 rounded-full border border-gray-200 dark:border-gray-700" />
     </TooltipFlotante>
   );
 }
@@ -430,23 +432,23 @@ function TarjetaResumenEntrega({ resumen }) {
 
   return (
     <div className="max-w-md space-y-3">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
-        <FileSearch className="h-6 w-6 text-blue-600" />
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 dark:bg-blue-500/10">
+        <FileSearch className="h-6 w-6 text-blue-600 dark:text-blue-400" />
       </div>
-      <p className="text-sm font-semibold text-gray-900">{info.titulo}</p>
-      <p className="text-xs leading-relaxed text-gray-500">{info.detalle}</p>
+      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{info.titulo}</p>
+      <p className="text-xs leading-relaxed text-gray-500 dark:text-gray-400">{info.detalle}</p>
       {filas.length > 0 && (
-        <dl className="mx-auto w-full max-w-sm space-y-1 rounded-xl bg-gray-50 px-4 py-3 text-left">
+        <dl className="mx-auto w-full max-w-sm space-y-1 rounded-xl bg-gray-50 dark:bg-gray-950 px-4 py-3 text-left">
           {filas.map(([etiqueta, valor]) => (
             <div key={etiqueta} className="flex items-baseline justify-between gap-3">
               <dt className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{etiqueta}</dt>
-              <dd className="text-right text-xs text-gray-700">{valor}</dd>
+              <dd className="text-right text-xs text-gray-700 dark:text-gray-300">{valor}</dd>
             </div>
           ))}
         </dl>
       )}
       {resumen.tipo === "texto" && resumen.texto ? (
-        <p className="max-h-48 overflow-y-auto whitespace-pre-line rounded-xl bg-gray-50 px-4 py-3 text-left text-xs leading-relaxed text-gray-600">
+        <p className="max-h-48 overflow-y-auto whitespace-pre-line rounded-xl bg-gray-50 dark:bg-gray-950 px-4 py-3 text-left text-xs leading-relaxed text-gray-600 dark:text-gray-300">
           {resumen.texto}
         </p>
       ) : null}
@@ -455,7 +457,7 @@ function TarjetaResumenEntrega({ resumen }) {
           href={resumen.url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-700"
+          className="inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-700 dark:hover:bg-blue-500"
         >
           Abrir enlace entregado
         </a>
@@ -519,9 +521,9 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
     if (!archivo) return null;
     if (archivo.vistaUrl) {
       return (
-        <div className="relative h-full w-full bg-gray-100">
+        <div className="relative h-full w-full bg-gray-100 dark:bg-gray-800">
           {cargandoVista && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-sm text-gray-500">
+            <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <Loader2 className="h-4 w-4 animate-spin" /> Abriendo documento...
             </div>
           )}
@@ -546,7 +548,7 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
     }
     if (archivo.tipo?.startsWith("image/")) {
       return (
-        <div className="flex h-full w-full items-center justify-center overflow-auto bg-gray-100 p-4">
+        <div className="flex h-full w-full items-center justify-center overflow-auto bg-gray-100 dark:bg-gray-800 p-4">
           <img src={archivo.descargaUrl} alt={archivo.nombre} className="max-h-full max-w-full object-contain" />
         </div>
       );
@@ -554,12 +556,12 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
     // tipo sin visor nativo: ficha + descarga
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-6 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
           <Paperclip className="h-7 w-7 text-gray-400" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-gray-900">{archivo.nombre}</p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{archivo.nombre}</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {archivo.tipo} {tamano ? `· ${tamano}` : ""}
           </p>
         </div>
@@ -571,7 +573,7 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
           href={archivo.descargaUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-700"
+          className="inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-700 dark:hover:bg-blue-500"
         >
           <Download className="h-4 w-4" />
           Descargar archivo
@@ -588,16 +590,16 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
       aria-modal="true"
     >
       <div
-        className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 dark:border-gray-800 px-5 py-4">
           <div className="min-w-0">
-            <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-              <Paperclip className="h-4 w-4 shrink-0 text-blue-600" />
+            <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+              <Paperclip className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
               Actividad enviada
             </p>
-            <p className="mt-0.5 truncate text-xs text-gray-500">{titulo}</p>
+            <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{titulo}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {archivo?.vistaUrl && (
@@ -607,7 +609,7 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
                   setCargandoVista(true);
                   setRecarga((r) => r + 1);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                 title="Pide a Canvas una sesión de visualización nueva y vuelve a abrir el documento"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
@@ -619,7 +621,7 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
                 href={archivo.descargaUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 <Download className="h-3.5 w-3.5" />
                 Descargar
@@ -628,7 +630,7 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
             <button
               type="button"
               onClick={onCerrar}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200"
               aria-label="Cerrar"
             >
               <X className="h-4 w-4" />
@@ -637,7 +639,7 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
         </div>
 
         {estado.archivos.length > 1 && (
-          <div className="flex flex-wrap gap-2 border-b border-gray-100 px-5 py-2.5">
+          <div className="flex flex-wrap gap-2 border-b border-gray-100 dark:border-gray-800 px-5 py-2.5">
             {estado.archivos.map((a, i) => (
               <button
                 key={`${a.nombre}-${i}`}
@@ -648,8 +650,8 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
                 }}
                 className={`max-w-xs truncate rounded-full px-3 py-1.5 text-xs font-medium ${
                   i === sel
-                    ? "bg-gray-900 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    ? "bg-gray-900 dark:bg-blue-600 text-white"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                 }`}
                 title={a.nombre}
               >
@@ -661,19 +663,19 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
 
         <div className="min-h-0 flex-1">
           {estado.cargando ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-500">
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-500 dark:text-gray-400">
               <Loader2 className="h-6 w-6 animate-spin" />
               <p className="text-sm">Consultando la entrega en Canvas...</p>
               <p className="text-xs text-gray-400">Puede tardar unos segundos la primera vez</p>
             </div>
           ) : estado.error ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-              <p className="text-sm font-medium text-red-600">No se pudo cargar la entrega</p>
-              <p className="max-w-md text-xs text-gray-500">{estado.error}</p>
+              <p className="text-sm font-medium text-red-600 dark:text-red-400">No se pudo cargar la entrega</p>
+              <p className="max-w-md text-xs text-gray-500 dark:text-gray-400">{estado.error}</p>
               <button
                 type="button"
                 onClick={onCerrar}
-                className="rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-700"
+                className="rounded-full bg-gray-900 dark:bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-gray-700 dark:hover:bg-blue-500"
               >
                 Cerrar
               </button>
@@ -684,7 +686,7 @@ function ModalVistaPrevia({ entrega, onCerrar }) {
                 <TarjetaResumenEntrega resumen={estado.resumen} />
               ) : (
                 <>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Esta actividad no tiene archivos adjuntos
                   </p>
                   {estado.motivo && <p className="text-xs text-gray-400">{estado.motivo}</p>}
@@ -729,13 +731,44 @@ function Toast({ mensaje, onclose }) {
 
   return (
     <div className={`fixed right-6 top-6 z-50 ${animState === "entering" ? "toast-enter" : animState === "exiting" ? "toast-exit" : ""}`}>
-      <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/70 px-5 py-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl">
+      <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/70 dark:bg-gray-900/70 px-5 py-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl">
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/10">
-          <CheckCircle2 className="h-5 w-5 text-green-600" />
+          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
         </div>
-        <span className="text-sm font-medium text-gray-800">{mensaje}</span>
+        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{mensaje}</span>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Tema claro / oscuro                                                */
+/* ------------------------------------------------------------------ */
+
+const CLAVE_TEMA = "magnolias-tema";
+
+function temaInicial() {
+  try {
+    const guardado = localStorage.getItem(CLAVE_TEMA);
+    if (guardado === "claro" || guardado === "oscuro") return guardado;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "oscuro" : "claro";
+  } catch {
+    return "claro";
+  }
+}
+
+function BotonTema({ tema, onCambiar }) {
+  const oscuro = tema === "oscuro";
+  return (
+    <button
+      type="button"
+      onClick={onCambiar}
+      aria-label={oscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+      title={oscuro ? "Modo claro" : "Modo oscuro"}
+      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white dark:focus:ring-blue-500/30"
+    >
+      {oscuro ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </button>
   );
 }
 
@@ -743,7 +776,7 @@ function Toast({ mensaje, onclose }) {
 /*  LoginForm                                                          */
 /* ------------------------------------------------------------------ */
 
-function LoginForm({ onLogin, aviso }) {
+function LoginForm({ onLogin, aviso, tema, onCambiarTema }) {
   const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [error, setError] = useState("");
@@ -766,7 +799,10 @@ function LoginForm({ onLogin, aviso }) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
+      <div className="absolute right-5 top-5">
+        <BotonTema tema={tema} onCambiar={onCambiarTema} />
+      </div>
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <img
@@ -774,45 +810,45 @@ function LoginForm({ onLogin, aviso }) {
             alt="Magnolias"
             className="h-20 w-20 rounded-2xl object-cover shadow-lg mb-4"
           />
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Calificaciones</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">Calificaciones</h1>
           <p className="text-sm text-gray-400 mt-1">Ciclo escolar 2026</p>
         </div>
 
         {aviso && (
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          <div className="mb-4 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
             {aviso}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm space-y-5">
+        <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 shadow-sm space-y-5">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700">Usuario</label>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Usuario</label>
             <input
               type="text"
               value={usuario}
               onChange={(e) => setUsuario(e.target.value)}
               autoFocus
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700">Contrasena</label>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Contrasena</label>
             <input
               type="password"
               value={contrasena}
               onChange={(e) => setContrasena(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
             />
           </div>
 
           {error && (
-            <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</div>
+            <div className="rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-2.5 text-sm text-red-600 dark:text-red-400">{error}</div>
           )}
 
           <button
             type="submit"
             disabled={cargando || !usuario.trim() || !contrasena.trim()}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-gray-900 dark:bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 dark:hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
           >
             {cargando && <Loader2 className="h-4 w-4 animate-spin" />}
             Iniciar sesion
@@ -1042,47 +1078,47 @@ function VistaCredenciales({ alumnos, onActualizar }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">
             <KeyRound className="h-5 w-5 text-gray-400" />
             Credenciales de alumnos
           </h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Cuentas de acceso registradas para el ciclo escolar en curso. Informacion de uso interno.
           </p>
         </div>
         <button
           type="button"
           onClick={abrirAgregar}
-          className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+          className="inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:hover:bg-blue-500"
         >
           <UserPlus className="h-4 w-4" />
           Agregar alumno
         </button>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50 text-left text-gray-500">
+            <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 text-left text-gray-500 dark:text-gray-400">
               <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide">Nombre</th>
               <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide">Cuenta</th>
               <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide">Contrasena</th>
               <th className="px-6 py-3"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
             {alumnos.map((alumno, idx) => (
-              <tr key={alumno.id_alumno} className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"} hover:bg-gray-100/60 transition-colors`}>
-                <td className="px-6 py-4 text-gray-900">{alumno.nombre}</td>
+              <tr key={alumno.id_alumno} className={`${idx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50/50 dark:bg-gray-800/40"} hover:bg-gray-100/60 dark:hover:bg-gray-800/60 transition-colors`}>
+                <td className="px-6 py-4 text-gray-900 dark:text-gray-100">{alumno.nombre}</td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-gray-500">{alumno.cuenta}</span>
+                    <span className="font-mono text-gray-500 dark:text-gray-400">{alumno.cuenta}</span>
                     <button
                       type="button"
                       onClick={() => copiar(alumno.id_alumno, alumno.cuenta, "cuenta")}
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors ${
                         copiado === `${alumno.id_alumno}-cuenta`
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          ? "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300"
+                          : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                       }`}
                     >
                       {copiado === `${alumno.id_alumno}-cuenta` ? (
@@ -1095,13 +1131,13 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-gray-500">
+                    <span className="font-mono text-gray-500 dark:text-gray-400">
                       {visibles[alumno.id_alumno] ? alumno.contrasena : "••••••••••"}
                     </span>
                     <button
                       type="button"
                       onClick={() => alternar(alumno.id_alumno)}
-                      className="text-gray-300 hover:text-gray-600"
+                      className="text-gray-300 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                       aria-label="Mostrar u ocultar contrasena"
                     >
                       {visibles[alumno.id_alumno] ? (
@@ -1115,8 +1151,8 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                       onClick={() => copiar(alumno.id_alumno, alumno.contrasena, "contra")}
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors ${
                         copiado === `${alumno.id_alumno}-contra`
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          ? "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300"
+                          : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                       }`}
                     >
                       {copiado === `${alumno.id_alumno}-contra` ? (
@@ -1132,7 +1168,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                     <button
                       type="button"
                       onClick={() => abrirMaterias(alumno)}
-                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                     >
                       <BookOpen className="h-3 w-3" />
                       Asignar materias
@@ -1140,7 +1176,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                     <button
                       type="button"
                       onClick={() => abrirEditar(alumno)}
-                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                     >
                       <Pencil className="h-3 w-3" />
                       Editar
@@ -1148,7 +1184,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                     <button
                       type="button"
                       onClick={() => setEliminando(alumno)}
-                      className="inline-flex items-center gap-1 rounded-full bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
+                      className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20"
                     >
                       <Trash2 className="h-3 w-3" />
                       Eliminar
@@ -1163,43 +1199,43 @@ function VistaCredenciales({ alumnos, onActualizar }) {
 
       {editando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Editar datos del alumno</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Editar datos del alumno</h3>
               <button
                 type="button"
                 onClick={cerrarEditar}
-                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Nombre</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Nombre</label>
                 <input
                   type="text"
                   value={form.nombre}
                   onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Cuenta</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Cuenta</label>
                 <input
                   type="text"
                   value={form.cuenta}
                   onChange={(e) => setForm({ ...form, cuenta: e.target.value })}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Contrasena</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Contrasena</label>
                 <input
                   type="text"
                   value={form.contrasena}
                   onChange={(e) => setForm({ ...form, contrasena: e.target.value })}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
                 />
               </div>
             </div>
@@ -1207,7 +1243,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
               <button
                 type="button"
                 onClick={cerrarEditar}
-                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancelar
               </button>
@@ -1215,7 +1251,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                 type="button"
                 onClick={guardarCambios}
                 disabled={guardando || !form.nombre.trim() || !form.cuenta.trim() || !form.contrasena.trim()}
-                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                className="inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
               >
                 {guardando ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1231,15 +1267,15 @@ function VistaCredenciales({ alumnos, onActualizar }) {
 
       {editandoMaterias && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 Asignar materias — {alumnos.find((a) => a.id_alumno === editandoMaterias)?.nombre}
               </h3>
               <button
                 type="button"
                 onClick={cerrarMaterias}
-                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1252,7 +1288,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                 placeholder="Buscar materia..."
                 value={busquedaMateria}
                 onChange={(e) => setBusquedaMateria(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 py-2.5 pl-10 pr-4 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
               />
             </div>
 
@@ -1260,13 +1296,13 @@ function VistaCredenciales({ alumnos, onActualizar }) {
               <button
                 type="button"
                 onClick={crearYAsignarMateria}
-                className="mb-3 w-full rounded-xl border border-dashed border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                className="mb-3 w-full rounded-xl border border-dashed border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-500/10 px-4 py-2.5 text-sm font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/20"
               >
                 + Crear materia "{busquedaMateria.trim()}" y asignarla
               </button>
             )}
 
-            <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 p-3">
               {materiasFiltradas.length === 0 ? (
                 <p className="text-sm text-gray-400">
                   {busquedaMateria ? "No se encontraron materias." : "No hay materias disponibles."}
@@ -1278,15 +1314,15 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                       key={m.id_materia}
                       className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                         materiasSeleccionadas.includes(m.id_materia)
-                          ? "bg-blue-50 text-blue-900"
-                          : "text-gray-700 hover:bg-gray-100"
+                          ? "bg-blue-50 dark:bg-blue-500/10 text-blue-900 dark:text-blue-200"
+                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={materiasSeleccionadas.includes(m.id_materia)}
                         onChange={() => toggleMateria(m.id_materia)}
-                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 focus:ring-blue-500"
                       />
                       {m.nombre}
                     </label>
@@ -1303,7 +1339,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
               <button
                 type="button"
                 onClick={cerrarMaterias}
-                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancelar
               </button>
@@ -1311,7 +1347,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                 type="button"
                 onClick={guardarMaterias}
                 disabled={guardandoMaterias}
-                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                className="inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
               >
                 {guardandoMaterias ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1327,52 +1363,52 @@ function VistaCredenciales({ alumnos, onActualizar }) {
 
       {agregando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Agregar nuevo alumno</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Agregar nuevo alumno</h3>
               <button
                 type="button"
                 onClick={cerrarAgregar}
-                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Nombre</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Nombre</label>
                 <input
                   type="text"
                   value={formNuevoAlumno.nombre}
                   onChange={(e) => setFormNuevoAlumno({ ...formNuevoAlumno, nombre: e.target.value })}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
                   placeholder="Nombre completo"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Cuenta</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Cuenta</label>
                 <input
                   type="text"
                   value={formNuevoAlumno.cuenta}
                   onChange={(e) => setFormNuevoAlumno({ ...formNuevoAlumno, cuenta: e.target.value })}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
                   placeholder="Usuario de acceso"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Contrasena</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Contrasena</label>
                 <input
                   type="text"
                   value={formNuevoAlumno.contrasena}
                   onChange={(e) => setFormNuevoAlumno({ ...formNuevoAlumno, contrasena: e.target.value })}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
                   placeholder="Contrasena de acceso"
                 />
               </div>
             </div>
 
             <div className="mt-5">
-              <label className="mb-2 block text-sm font-medium text-gray-700">Materias (opcional)</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Materias (opcional)</label>
               <div className="relative mb-3">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
@@ -1380,7 +1416,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                   placeholder="Buscar materia..."
                   value={busquedaMateriaNueva}
                   onChange={(e) => setBusquedaMateriaNueva(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 py-2.5 pl-10 pr-4 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
                 />
               </div>
 
@@ -1388,13 +1424,13 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                 <button
                   type="button"
                   onClick={crearMateriaNueva}
-                  className="mb-3 w-full rounded-xl border border-dashed border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                  className="mb-3 w-full rounded-xl border border-dashed border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-500/10 px-4 py-2.5 text-sm font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/20"
                 >
                   + Crear materia "{busquedaMateriaNueva.trim()}" y asignarla
                 </button>
               )}
 
-              <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 p-3">
                 {materiasFiltradasNuevas.length === 0 ? (
                   <p className="text-sm text-gray-400">
                     {busquedaMateriaNueva ? "No se encontraron materias." : "No hay materias disponibles."}
@@ -1406,15 +1442,15 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                         key={m.id_materia}
                         className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                           materiasNuevas.includes(m.id_materia)
-                            ? "bg-blue-50 text-blue-900"
-                            : "text-gray-700 hover:bg-gray-100"
+                            ? "bg-blue-50 dark:bg-blue-500/10 text-blue-900 dark:text-blue-200"
+                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={materiasNuevas.includes(m.id_materia)}
                           onChange={() => toggleMateriaNueva(m.id_materia)}
-                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 focus:ring-blue-500"
                         />
                         {m.nombre}
                       </label>
@@ -1434,7 +1470,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
               <button
                 type="button"
                 onClick={cerrarAgregar}
-                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancelar
               </button>
@@ -1442,7 +1478,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                 type="button"
                 onClick={guardarNuevoAlumno}
                 disabled={guardandoNuevo}
-                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                className="inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
               >
                 {guardandoNuevo ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1458,18 +1494,18 @@ function VistaCredenciales({ alumnos, onActualizar }) {
 
       {eliminando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Eliminar alumno</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Eliminar alumno</h3>
               <button
                 type="button"
                 onClick={() => setEliminando(null)}
-                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
               Se eliminara a <span className="font-medium">{eliminando.nombre}</span> junto con
               todo su avance, calificaciones e inscripciones. Esta accion no se puede deshacer.
             </p>
@@ -1477,7 +1513,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
               <button
                 type="button"
                 onClick={() => setEliminando(null)}
-                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancelar
               </button>
@@ -1485,7 +1521,7 @@ function VistaCredenciales({ alumnos, onActualizar }) {
                 type="button"
                 onClick={confirmarEliminacion}
                 disabled={guardandoEliminacion}
-                className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
               >
                 {guardandoEliminacion && <Loader2 className="h-4 w-4 animate-spin" />}
                 Eliminar
@@ -1563,20 +1599,20 @@ function VistaRegistro({ alumnos, materias, inscripciones, progreso, onRegistrar
   const alumnoSeleccionado = alumnos.find((a) => a.id_alumno === Number(alumnoId));
 
   const campoSelect =
-    "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-300";
+    "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25 disabled:cursor-not-allowed disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-300 dark:disabled:text-gray-600";
 
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight text-gray-900">Registro semanal</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">Registro semanal</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Selecciona al alumno, las materias correspondientes y el hito a evaluar para registrar su avance.
         </p>
       </div>
 
-      <div className="space-y-5 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="space-y-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 shadow-sm">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">Alumno</label>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Alumno</label>
           <select value={alumnoId} onChange={(e) => manejarAlumno(e.target.value)} className={campoSelect}>
             <option value="">Selecciona un alumno</option>
             {alumnos.map((a) => (
@@ -1590,28 +1626,28 @@ function VistaRegistro({ alumnos, materias, inscripciones, progreso, onRegistrar
         {alumnoId ? (
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-700">Materias</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Materias</label>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={seleccionarTodas}
                   disabled={todasSeleccionadas}
-                  className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-300"
+                  className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 disabled:text-gray-300 dark:disabled:text-gray-600"
                 >
                   Seleccionar todas
                 </button>
-                <span className="text-gray-300">|</span>
+                <span className="text-gray-300 dark:text-gray-500">|</span>
                 <button
                   type="button"
                   onClick={limpiarSeleccion}
                   disabled={materiasIds.length === 0}
-                  className="text-xs font-medium text-gray-500 hover:text-gray-700 disabled:text-gray-300"
+                  className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:text-gray-300 dark:disabled:text-gray-600"
                 >
                   Limpiar
                 </button>
               </div>
             </div>
-            <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 p-3">
               {materiasDisponibles.length === 0 ? (
                 <p className="text-sm text-gray-400">Este alumno no tiene materias asignadas.</p>
               ) : (
@@ -1620,14 +1656,14 @@ function VistaRegistro({ alumnos, materias, inscripciones, progreso, onRegistrar
                     <label
                       key={m.id_materia}
                       className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                        materiasIds.includes(m.id_materia) ? "bg-blue-50 text-blue-900" : "text-gray-700 hover:bg-gray-100"
+                        materiasIds.includes(m.id_materia) ? "bg-blue-50 dark:bg-blue-500/10 text-blue-900 dark:text-blue-200" : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={materiasIds.includes(m.id_materia)}
                         onChange={() => toggleMateria(m.id_materia)}
-                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 focus:ring-blue-500"
                       />
                       {m.nombre}
                     </label>
@@ -1642,7 +1678,7 @@ function VistaRegistro({ alumnos, materias, inscripciones, progreso, onRegistrar
         ) : null}
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">Hito</label>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Hito</label>
           <select
             value={hito}
             onChange={(e) => setHito(e.target.value)}
@@ -1664,7 +1700,7 @@ function VistaRegistro({ alumnos, materias, inscripciones, progreso, onRegistrar
           type="button"
           onClick={manejarRegistro}
           disabled={!alumnoId || materiasIds.length === 0 || !hito || guardando}
-          className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+          className="inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 dark:hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
         >
           {guardando ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -1772,8 +1808,8 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight text-gray-900">Avance individual</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">Avance individual</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Consulta el avance de un alumno especifico, materia por materia.
         </p>
       </div>
@@ -1784,7 +1820,7 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
           <select
             value={alumnoId}
             onChange={(e) => setAlumnoId(e.target.value)}
-            className="w-full rounded-full border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="w-full rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 py-2.5 pl-10 pr-4 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
           >
             <option value="">Buscar alumno</option>
             {alumnos.map((a) => (
@@ -1798,7 +1834,7 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
         <select
           value={hitoSeleccionado}
           onChange={(e) => setHitoSeleccionado(e.target.value)}
-          className="rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+          className="rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
         >
           <option value="todos">Todos los hitos</option>
           <option value="rango">Rango de hitos</option>
@@ -1814,7 +1850,7 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
             <select
               value={hitoDesde}
               onChange={(e) => setHitoDesde(e.target.value)}
-              className="rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+              className="rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
             >
               <option value="" disabled>Desde</option>
               {HITOS.map((h) => (
@@ -1826,7 +1862,7 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
             <select
               value={hitoHasta}
               onChange={(e) => setHitoHasta(e.target.value)}
-              className="rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+              className="rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
             >
               <option value="" disabled>Hasta</option>
               {HITOS.map((h) => (
@@ -1838,14 +1874,14 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
           </>
         )}
 
-        <div className="inline-flex items-center rounded-full bg-gray-100 p-1">
+        <div className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-1">
           {opciones.map((o) => (
             <button
               key={o.id}
               type="button"
               onClick={() => setFiltro(o.id)}
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                filtro === o.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                filtro === o.id ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
               }`}
             >
               {o.nombre}
@@ -1858,7 +1894,7 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
             <button
               type="button"
               onClick={descargarPDF}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
             >
               <Download className="h-3.5 w-3.5" />
               PDF
@@ -1866,7 +1902,7 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
             <button
               type="button"
               onClick={descargarExcel}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
             >
               <Download className="h-3.5 w-3.5" />
               Excel
@@ -1876,7 +1912,7 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
       </div>
 
       {!alumnoId ? (
-        <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-10 text-center text-sm text-gray-400">
+        <p className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 px-4 py-10 text-center text-sm text-gray-400">
           Selecciona un alumno para ver su avance.
         </p>
       ) : (
@@ -1889,14 +1925,14 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
                 n.id_materia === materia?.id_materia
             );
             return (
-              <div key={materia?.id_materia} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <div key={materia?.id_materia} className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                  <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-gray-100">
                     <BookOpen className="h-4 w-4 text-gray-400" />
                     {materia?.nombre}
                   </h3>
                   {global?.calificacion_global != null && (
-                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                    <span className="rounded-full bg-blue-50 dark:bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300">
                       Global: {Number(global.calificacion_global).toFixed(1)}
                     </span>
                   )}
@@ -1927,10 +1963,10 @@ function VistaAvance({ alumnos, materias, inscripciones, progreso, notasMateria 
                           />
                         }
                       >
-                        <div className="flex items-center gap-1.5 rounded-full border border-gray-100 bg-gray-50 px-2.5 py-1">
-                          <span className="text-xs font-medium text-gray-500">{h.hito}</span>
+                        <div className="flex items-center gap-1.5 rounded-full border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-2.5 py-1">
+                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{h.hito}</span>
                           {h.nota != null && (
-                            <span className="text-xs font-semibold text-blue-600">{h.nota}</span>
+                            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">{h.nota}</span>
                           )}
                           <StatusChip entregado={h.cumplio} />
                         </div>
@@ -1997,7 +2033,7 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
   const alumnosIds = useMemo(() => [...new Set(progreso.map((p) => p.id_alumno))], [progreso]);
 
   const campoSelect =
-    "rounded-full border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
+    "rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25";
 
   const fmt = (iso) => {
     if (!iso) return "-";
@@ -2021,27 +2057,27 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight text-gray-900">Auditoria</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">Auditoria</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Historial de sincronizaciones con Canvas y evidencia de cada registro: entrega, comentario y origen.
         </p>
       </div>
 
       {/* Bitacora de sincronizaciones */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
-          <History className="h-4 w-4 text-blue-600" />
+      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 shadow-sm">
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+          <History className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           Historial de sincronizaciones
         </h3>
         {!bitacora || bitacora.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-400">
+          <p className="rounded-xl border border-dashed border-gray-200 dark:border-gray-700 px-4 py-6 text-center text-sm text-gray-400">
             Aun no hay sincronizaciones registradas. Presiona "Sincronizar" en la Matriz general.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
+                <tr className="border-b border-gray-100 dark:border-gray-800 text-xs uppercase tracking-wide text-gray-400">
                   <th className="px-2 py-2 font-medium">Fecha</th>
                   <th className="px-2 py-2 font-medium">Duracion</th>
                   <th className="px-2 py-2 font-medium">Alumnos</th>
@@ -2063,13 +2099,13 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
                     : [];
                   const conError = (b.alumnos_error ?? 0) > 0 || errores.length > 0;
                   return (
-                    <tr key={b.id} className="border-b border-gray-50 text-gray-700">
+                    <tr key={b.id} className="border-b border-gray-50 dark:border-gray-800 text-gray-700 dark:text-gray-300">
                       <td className="whitespace-nowrap px-2 py-2">{fmt(b.iniciado_en)}</td>
                       <td className="whitespace-nowrap px-2 py-2">{fmtDuracion(b.duracion_ms)}</td>
                       <td className="whitespace-nowrap px-2 py-2">
-                        <span className="font-medium text-gray-900">{b.alumnos_ok ?? 0}</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{b.alumnos_ok ?? 0}</span>
                         {conError && (
-                          <span className="ml-1 text-red-500">({b.alumnos_error} err.)</span>
+                          <span className="ml-1 text-red-500 dark:text-red-400">({b.alumnos_error} err.)</span>
                         )}
                       </td>
                       <td className="px-2 py-2">{b.hitos_marcados ?? 0}</td>
@@ -2077,17 +2113,17 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
                       <td className="px-2 py-2">{b.global_actualizadas ?? 0}</td>
                       <td className="px-2 py-2">
                         {errores.length === 0 && sinMatch.length === 0 && cursosSin.length === 0 ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                          <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                             <CheckCircle2 className="h-3.5 w-3.5" /> Limpia
                           </span>
                         ) : (
-                          <details className="text-xs text-gray-500">
-                            <summary className="cursor-pointer font-medium text-gray-600">
+                          <details className="text-xs text-gray-500 dark:text-gray-400">
+                            <summary className="cursor-pointer font-medium text-gray-600 dark:text-gray-300">
                               Ver ({errores.length + sinMatch.length + cursosSin.length})
                             </summary>
                             <ul className="mt-1 max-w-md list-inside list-disc space-y-0.5 pl-1">
                               {errores.map((e, i) => (
-                                <li key={`e${i}`} className="text-red-600">
+                                <li key={`e${i}`} className="text-red-600 dark:text-red-400">
                                   {e.alumno}: {e.error}
                                 </li>
                               ))}
@@ -2101,13 +2137,13 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
                           </details>
                         )}
                         {(b.materias_creadas ?? 0) > 0 && (
-                          <div className="mt-0.5 text-xs text-emerald-600">
+                          <div className="mt-0.5 text-xs text-emerald-600 dark:text-emerald-400">
                             {b.materias_creadas} materia
                             {(b.materias_creadas ?? 0) > 1 ? "s" : ""} nueva
                             {(b.materias_creadas ?? 0) > 1 ? "s" : ""} ({b.inscripciones_creadas ?? 0}{" "}
                             insc.)
                             {materiasNuevas.length > 0 && (
-                              <span className="text-gray-500">: {materiasNuevas.join(", ")}</span>
+                              <span className="text-gray-500 dark:text-gray-400">: {materiasNuevas.join(", ")}</span>
                             )}
                           </div>
                         )}
@@ -2122,10 +2158,10 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
       </div>
 
       {/* Registros con evidencia */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-            <FileSearch className="h-4 w-4 text-blue-600" />
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+            <FileSearch className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             Registros con evidencia
             <span className="font-normal text-gray-400">({registros.length})</span>
           </h3>
@@ -2136,7 +2172,7 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar alumno, materia, comentario..."
-              className="w-64 rounded-full border border-gray-200 bg-gray-50 py-2 pl-9 pr-4 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+              className="w-64 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 py-2 pl-9 pr-4 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25"
             />
           </div>
         </div>
@@ -2179,7 +2215,7 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
+              <tr className="border-b border-gray-100 dark:border-gray-800 text-xs uppercase tracking-wide text-gray-400">
                 <th className="px-2 py-2 font-medium">Alumno</th>
                 <th className="px-2 py-2 font-medium">Materia</th>
                 <th className="px-2 py-2 font-medium">Hito</th>
@@ -2204,22 +2240,22 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
                   const origen = p.origen ?? "manual";
                   const comentario = p.comentario ?? null;
                   return (
-                    <tr key={p.id_progreso} className="border-b border-gray-50 text-gray-700 hover:bg-gray-50">
-                      <td className="whitespace-nowrap px-2 py-2 text-gray-900">
+                    <tr key={p.id_progreso} className="border-b border-gray-50 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="whitespace-nowrap px-2 py-2 text-gray-900 dark:text-gray-100">
                         {nombreAlumno(p.id_alumno)}
                       </td>
                       <td className="whitespace-nowrap px-2 py-2">{nombreMateria(p.id_materia)}</td>
                       <td className="whitespace-nowrap px-2 py-2 font-medium">{p.hito}</td>
                       <td className="px-2 py-2">
                         {p.cumplio ? (
-                          <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                          <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         ) : (
                           <span className="text-xs text-gray-400">Pendiente</span>
                         )}
                       </td>
                       <td className="px-2 py-2">
                         {p.calificacion != null ? (
-                          <span className="font-semibold text-blue-700">{p.calificacion}</span>
+                          <span className="font-semibold text-blue-700 dark:text-blue-300">{p.calificacion}</span>
                         ) : (
                           "-"
                         )}
@@ -2230,19 +2266,19 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
                           <TooltipFlotante
                             contenido={
                               <div>
-                                <p className="text-xs font-semibold text-gray-900">Comentario</p>
-                                <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-line text-xs leading-relaxed text-gray-600">
+                                <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">Comentario</p>
+                                <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-line text-xs leading-relaxed text-gray-600 dark:text-gray-300">
                                   {comentario}
                                 </p>
                               </div>
                             }
                           >
-                            <span className="block truncate text-gray-600">
+                            <span className="block truncate text-gray-600 dark:text-gray-300">
                               {comentario.replace(/\n+/g, " | ")}
                             </span>
                           </TooltipFlotante>
                         ) : (
-                          <span className="text-gray-300">-</span>
+                          <span className="text-gray-300 dark:text-gray-500">-</span>
                         )}
                       </td>
                       <td className="max-w-xs px-2 py-2">
@@ -2250,33 +2286,33 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
                           <TooltipFlotante
                             contenido={
                               <div>
-                                <p className="text-xs font-semibold text-gray-900">Actividad en Canvas</p>
-                                <p className="mt-1 text-xs leading-relaxed text-gray-600">
+                                <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">Actividad en Canvas</p>
+                                <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-300">
                                   {p.actividad_canvas}
                                 </p>
                               </div>
                             }
                           >
-                            <span className="block truncate text-gray-500">
+                            <span className="block truncate text-gray-500 dark:text-gray-400">
                               {p.actividad_canvas}
                             </span>
                           </TooltipFlotante>
                         ) : (
-                          <span className="text-gray-300">-</span>
+                          <span className="text-gray-300 dark:text-gray-500">-</span>
                         )}
                       </td>
                       <td className="px-2 py-2">
                         <span
                           className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
                             origen === "canvas"
-                              ? "bg-blue-50 text-blue-700"
-                              : "bg-gray-100 text-gray-600"
+                              ? "bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                              : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
                           }`}
                         >
                           {origen === "canvas" ? "Canvas" : "Manual"}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-gray-500">
+                      <td className="whitespace-nowrap px-2 py-2 text-gray-500 dark:text-gray-400">
                         {fmt(p.sincronizado_en)}
                       </td>
                     </tr>
@@ -2303,14 +2339,14 @@ function VistaAuditoria({ alumnos, materias, progreso, bitacora }) {
 function ReporteSync({ reporte, onCerrar }) {
   const conErrores = (reporte.errores || []).length > 0;
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm">
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">Sincronizacion con Canvas</h3>
-          <p className="mt-1 text-sm text-gray-600">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Sincronizacion con Canvas</h3>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
             {reporte.alumnos_ok ?? 0} alumnos sincronizados
             {(reporte.alumnos_error ?? 0) > 0 && (
-              <span className="text-red-500">, {reporte.alumnos_error} con error</span>
+              <span className="text-red-500 dark:text-red-400">, {reporte.alumnos_error} con error</span>
             )}
             {" · "}
             {reporte.hitos_marcados ?? 0} hitos marcados
@@ -2319,13 +2355,13 @@ function ReporteSync({ reporte, onCerrar }) {
             {" · "}
             {reporte.global_actualizadas ?? 0} calificaciones globales
             {(reporte.materias_creadas ?? 0) > 0 && (
-              <span className="text-emerald-600">
+              <span className="text-emerald-600 dark:text-emerald-400">
                 {" · "}
                 {reporte.materias_creadas} materias nuevas
               </span>
             )}
             {(reporte.inscripciones_creadas ?? 0) > 0 && (
-              <span className="text-emerald-600">
+              <span className="text-emerald-600 dark:text-emerald-400">
                 {" · "}
                 {reporte.inscripciones_creadas} inscripciones nuevas
               </span>
@@ -2335,14 +2371,14 @@ function ReporteSync({ reporte, onCerrar }) {
         <button
           type="button"
           onClick={onCerrar}
-          className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
       {(reporte.errores || []).length > 0 && (
-        <ul className="mt-3 space-y-1 rounded-xl bg-red-50 p-3 text-xs text-red-700">
+        <ul className="mt-3 space-y-1 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-300">
           {reporte.errores.map((e, i) => (
             <li key={i}>
               <span className="font-semibold">{e.alumno}:</span> {e.error}
@@ -2352,22 +2388,22 @@ function ReporteSync({ reporte, onCerrar }) {
       )}
 
       {(reporte.materias_creadas_nombres || []).length > 0 && (
-        <div className="mt-3 text-xs text-gray-500">
-          <span className="font-medium text-emerald-700">Materias nuevas creadas:</span>{" "}
+        <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+          <span className="font-medium text-emerald-700 dark:text-emerald-300">Materias nuevas creadas:</span>{" "}
           {reporte.materias_creadas_nombres.join(", ")}
         </div>
       )}
 
       {(reporte.cursos_sin_match || []).length > 0 && (
-        <div className="mt-3 text-xs text-gray-500">
-          <span className="font-medium text-gray-700">Cursos sin materia asignada:</span>{" "}
+        <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+          <span className="font-medium text-gray-700 dark:text-gray-300">Cursos sin materia asignada:</span>{" "}
           {reporte.cursos_sin_match.join(", ")}
         </div>
       )}
 
       {(reporte.actividades_sin_match || []).length > 0 && (
-        <details className="mt-2 text-xs text-gray-500">
-          <summary className="cursor-pointer font-medium text-gray-700">
+        <details className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          <summary className="cursor-pointer font-medium text-gray-700 dark:text-gray-300">
             Actividades sin hito asignado ({reporte.actividades_sin_match.length})
           </summary>
           <ul className="mt-1 list-inside list-disc pl-2">
@@ -2495,8 +2531,8 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
     <div className="space-y-4">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight text-gray-900">Matriz general</h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">Matriz general</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Cruce consolidado de alumnos, materias y hitos a lo largo del ciclo escolar.
           </p>
         </div>
@@ -2507,7 +2543,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
                 type="button"
                 onClick={sincronizar}
                 disabled={sincronizando}
-                className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-blue-500/40"
                 title="Entrar a Canvas y revisar entregas/calificaciones"
               >
                 {sincronizando ? (
@@ -2521,7 +2557,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
             <button
               type="button"
               onClick={descargarMatrizPDF}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
             >
               <Download className="h-3.5 w-3.5" />
               PDF
@@ -2529,7 +2565,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
             <button
               type="button"
               onClick={descargarMatrizExcel}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
             >
               <Download className="h-3.5 w-3.5" />
               Excel
@@ -2541,18 +2577,18 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
       {reporte && <ReporteSync reporte={reporte} onCerrar={() => setReporte(null)} />}
 
       <div
-        className="max-h-[70vh] overflow-auto rounded-2xl border border-gray-100 bg-white shadow-sm"
+        className="max-h-[70vh] overflow-auto rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm"
       >
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="sticky left-0 top-0 z-30 w-44 border-b border-r border-gray-100 bg-gray-50 px-3 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 shadow-[inset_-1px_0_0_#f3f4f6,0_2px_4px_rgba(0,0,0,0.06)]">
+              <th className="sticky left-0 top-0 z-30 w-44 border-b border-r border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-3 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 shadow-[inset_-1px_0_0_#f3f4f6,0_2px_4px_rgba(0,0,0,0.06)] dark:shadow-[inset_-1px_0_0_#1f2937,0_2px_4px_rgba(0,0,0,0.4)]">
                 Alumno / Materia
               </th>
               {HITOS.map((h) => (
                 <th
                   key={h}
-                  className="sticky top-0 z-20 border-b border-gray-100 bg-gray-50 px-2 py-3 text-center text-xs font-medium uppercase tracking-wide text-gray-500 shadow-[0_2px_4px_rgba(0,0,0,0.06)]"
+                  className="sticky top-0 z-20 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-2 py-3 text-center text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 shadow-[0_2px_4px_rgba(0,0,0,0.06)]"
                 >
                   {h}
                 </th>
@@ -2562,18 +2598,18 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
           <tbody>
             {grupos.map((grupo, grupoIdx) => {
               const bg = grupo.enRiesgo
-                ? "bg-red-50"
+                ? "bg-red-50 dark:bg-red-500/10"
                 : grupoIdx % 2 === 0
-                  ? "bg-white"
-                  : "bg-blue-50/40";
-              const bgHeader = grupo.enRiesgo ? "bg-red-100" : "bg-gray-50";
-              const textoHeader = grupo.enRiesgo ? "text-red-800" : "text-gray-900";
+                  ? "bg-white dark:bg-gray-900"
+                  : "bg-blue-50/40 dark:bg-blue-500/10";
+              const bgHeader = grupo.enRiesgo ? "bg-red-100 dark:bg-red-500/15" : "bg-gray-50 dark:bg-gray-950";
+              const textoHeader = grupo.enRiesgo ? "text-red-800 dark:text-red-200" : "text-gray-900 dark:text-gray-100";
               return (
                 <Fragment key={grupo.alumno.id_alumno}>
                   <tr>
                     <td
                       colSpan={HITOS.length + 1}
-                      className={`sticky left-0 z-10 border-b border-gray-100 px-4 py-2.5 text-sm font-semibold ${bgHeader} ${textoHeader}`}
+                      className={`sticky left-0 z-10 border-b border-gray-100 dark:border-gray-800 px-4 py-2.5 text-sm font-semibold ${bgHeader} ${textoHeader}`}
                     >
                       {grupo.alumno.nombre}{" "}
                       <span className="font-normal text-gray-400">cuenta {grupo.alumno.cuenta}</span>
@@ -2581,11 +2617,11 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
                   </tr>
                   {grupo.filas.map((fila) => (
                     <tr key={`${fila.id_alumno}-${fila.id_materia}`} className={`${bg} hover:brightness-95`}>
-                      <td className={`sticky left-0 z-10 border-b border-r border-gray-100 px-3 py-2 pl-4 text-gray-600 ${bg}`}>
+                      <td className={`sticky left-0 z-10 border-b border-r border-gray-100 dark:border-gray-800 px-3 py-2 pl-4 text-gray-600 dark:text-gray-300 ${bg}`}>
                         {fila.materiaNombre}
                       </td>
                       {fila.celdas.map((celda, cIdx) => (
-                        <td key={cIdx} className={`border-b border-gray-100 px-2 py-2 text-center ${bg}`}>
+                        <td key={cIdx} className={`border-b border-gray-100 dark:border-gray-800 px-2 py-2 text-center ${bg}`}>
                           <Indicador
                             entregado={celda.cumplio}
                             nota={celda.nota}
@@ -2631,7 +2667,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center gap-6 text-xs text-gray-500">
+      <div className="flex flex-wrap items-center gap-6 text-xs text-gray-500 dark:text-gray-400">
         <span className="flex items-center gap-2">
           <Indicador entregado={true} /> Hito entregado
         </span>
@@ -2639,35 +2675,35 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
           <Indicador entregado={false} /> Hito pendiente
         </span>
         <span className="flex items-center gap-2">
-          <span className="h-4 w-4 rounded bg-red-100" /> Alumno en riesgo (global &lt; 70)
+          <span className="h-4 w-4 rounded bg-red-100 dark:bg-red-500/15" /> Alumno en riesgo (global &lt; 70)
         </span>
       </div>
 
       {eliminando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Eliminar registro</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Eliminar registro</h3>
               <button
                 type="button"
                 onClick={() => setEliminando(null)}
-                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Alumno</span>
-                <span className="font-medium text-gray-900">{eliminando.alumno}</span>
+                <span className="text-gray-500 dark:text-gray-400">Alumno</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{eliminando.alumno}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Materia</span>
-                <span className="font-medium text-gray-900">{eliminando.materia}</span>
+                <span className="text-gray-500 dark:text-gray-400">Materia</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{eliminando.materia}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Hito</span>
-                <span className="font-medium text-gray-900">{eliminando.hito}</span>
+                <span className="text-gray-500 dark:text-gray-400">Hito</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{eliminando.hito}</span>
               </div>
             </div>
             <p className="mt-4 text-xs text-gray-400">Esta accion no se puede deshacer.</p>
@@ -2675,7 +2711,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
               <button
                 type="button"
                 onClick={() => setEliminando(null)}
-                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancelar
               </button>
@@ -2683,7 +2719,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
                 type="button"
                 onClick={confirmarEliminacion}
                 disabled={guardandoEliminacion}
-                className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
               >
                 {guardandoEliminacion ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -2699,36 +2735,36 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
 
       {registrando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Registrar hito</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Registrar hito</h3>
               <button
                 type="button"
                 onClick={() => setRegistrando(null)}
-                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Alumno</span>
-                <span className="font-medium text-gray-900">{registrando.alumno}</span>
+                <span className="text-gray-500 dark:text-gray-400">Alumno</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{registrando.alumno}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Materia</span>
-                <span className="font-medium text-gray-900">{registrando.materia}</span>
+                <span className="text-gray-500 dark:text-gray-400">Materia</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{registrando.materia}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Hito</span>
-                <span className="font-medium text-gray-900">{registrando.hito}</span>
+                <span className="text-gray-500 dark:text-gray-400">Hito</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{registrando.hito}</span>
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setRegistrando(null)}
-                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancelar
               </button>
@@ -2736,7 +2772,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
                 type="button"
                 onClick={confirmarRegistro}
                 disabled={guardandoRegistro}
-                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
               >
                 {guardandoRegistro ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -2818,18 +2854,18 @@ function NotificacionCambioClase({ notificacion, onCerrar }) {
 
   return (
     <div className={`fixed left-1/2 top-4 z-[60] -translate-x-1/2 ${animState === "entering" ? "notify-enter" : animState === "exiting" ? "notify-exit" : ""}`}>
-      <div className="flex items-center gap-3.5 rounded-[20px] border border-white/40 bg-white/70 px-5 py-3.5 shadow-[0_8px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl">
+      <div className="flex items-center gap-3.5 rounded-[20px] border border-white/40 bg-white/70 dark:bg-gray-900/70 px-5 py-3.5 shadow-[0_8px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
-          <Calendar className="h-5 w-5 text-blue-600" />
+          <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
         </div>
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
             Horario escolar
           </p>
-          <p className="text-sm font-semibold text-gray-900">
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             {notificacion?.titulo}
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
             {notificacion?.mensaje}
           </p>
         </div>
@@ -2949,11 +2985,11 @@ function VistaHorario({ soloLectura = false }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">
             <Calendar className="h-5 w-5 text-gray-400" />
             Horario escolar
           </h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Horario semanal del ciclo escolar en curso. Los cambios se sincronizan con todos los dispositivos.
           </p>
         </div>
@@ -2961,7 +2997,7 @@ function VistaHorario({ soloLectura = false }) {
           <button
             type="button"
             onClick={descargarHorarioPDF}
-            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
           >
             <Download className="h-3.5 w-3.5" />
             PDF
@@ -2970,20 +3006,20 @@ function VistaHorario({ soloLectura = false }) {
             <button
               type="button"
               onClick={pedirPermisoNotif}
-              className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-200"
+              className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 dark:bg-gray-800 px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
             >
               <Bell className="h-3.5 w-3.5" />
               Activar notificaciones
             </button>
           )}
           {permisoNotif === "granted" && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 dark:bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-300">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Notificaciones activas
             </span>
           )}
           {permisoNotif === "denied" && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-400">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 dark:bg-gray-950 px-3 py-1.5 text-xs font-medium text-gray-400">
               <Bell className="h-3.5 w-3.5" />
               Notificaciones bloqueadas
             </span>
@@ -2992,7 +3028,7 @@ function VistaHorario({ soloLectura = false }) {
       </div>
 
       {/* Card: en curso ahora */}
-      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-6 py-5 text-white">
           <div className="flex items-start justify-between">
             <div>
@@ -3035,16 +3071,16 @@ function VistaHorario({ soloLectura = false }) {
       </div>
 
       {/* Grid del horario */}
-      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <p className="text-sm font-medium text-gray-700">Vista semanal</p>
+      <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
+        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-4">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Vista semanal</p>
           <div className="flex gap-2">
             {editando ? (
               <>
                 <button
                   type="button"
                   onClick={restaurar}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   Restaurar
@@ -3052,7 +3088,7 @@ function VistaHorario({ soloLectura = false }) {
                 <button
                   type="button"
                   onClick={guardar}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 dark:bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-gray-800 dark:hover:bg-blue-500"
                 >
                   <Save className="h-3.5 w-3.5" />
                   Guardar
@@ -3063,7 +3099,7 @@ function VistaHorario({ soloLectura = false }) {
                 <button
                   type="button"
                   onClick={() => setEditando(true)}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-4 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 dark:bg-gray-800 px-4 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   Editar
@@ -3076,13 +3112,13 @@ function VistaHorario({ soloLectura = false }) {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50 text-left text-gray-500">
+              <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 text-left text-gray-500 dark:text-gray-400">
                 <th className="px-5 py-3 text-xs font-medium uppercase tracking-wide">Hora</th>
                 {DIAS.map((d) => (
                   <th
                     key={d}
                     className={`px-5 py-3 text-xs font-medium uppercase tracking-wide ${
-                      estado.diaIdx === DIAS.indexOf(d) ? "bg-blue-50 text-blue-700" : ""
+                      estado.diaIdx === DIAS.indexOf(d) ? "bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300" : ""
                     }`}
                   >
                     {d}
@@ -3090,13 +3126,13 @@ function VistaHorario({ soloLectura = false }) {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
               {BLOQUES.map((bloque, bIdx) => (
                 <tr
                   key={bloque.inicio}
-                  className={bIdx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}
+                  className={bIdx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50/50 dark:bg-gray-800/40"}
                 >
-                  <td className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-gray-500">
+                  <td className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-gray-500 dark:text-gray-400">
                     {bloque.inicio} – {bloque.fin}
                   </td>
                   {DIAS.map((d, dIdx) => {
@@ -3111,8 +3147,8 @@ function VistaHorario({ soloLectura = false }) {
                         key={d}
                         onClick={() => iniciarEdicion(bIdx, dIdx)}
                         className={`px-5 py-3.5 text-sm ${
-                          editando ? "cursor-pointer hover:bg-blue-50" : ""
-                        } ${esActual ? "bg-blue-50/60 ring-1 ring-inset ring-blue-200" : ""}`}
+                          editando ? "cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-500/10" : ""
+                        } ${esActual ? "bg-blue-50/60 dark:bg-blue-500/15 ring-1 ring-inset ring-blue-200 dark:ring-blue-500/30" : ""}`}
                       >
                         {editandoEsta ? (
                           <input
@@ -3125,12 +3161,15 @@ function VistaHorario({ soloLectura = false }) {
                               if (e.key === "Escape") cancelarCelda();
                             }}
                             autoFocus
-                            className="w-full rounded-lg border border-blue-300 bg-white px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            className="w-full rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-gray-900 px-2 py-1 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-500/30"
                           />
                         ) : (
                           <span
-                            className={`inline-flex items-center gap-1.5 ${esAusente ? "" : "font-medium"}`}
-                            style={esAusente ? {} : { color: color.texto }}
+                            className={`inline-flex items-center gap-1.5 ${esAusente ? "" : "font-medium texto-materia"}`}
+                            style={{
+                              "--materia-texto": color.texto,
+                              "--materia-punto": color.punto,
+                            }}
                           >
                             {!esAusente && valor && (
                               <span
@@ -3139,7 +3178,7 @@ function VistaHorario({ soloLectura = false }) {
                               />
                             )}
                             {esAusente ? (
-                              <span className="text-gray-300">{valor || "—"}</span>
+                              <span className="text-gray-300 dark:text-gray-500">{valor || "—"}</span>
                             ) : (
                               <>
                                 {valor || "—"}
@@ -3160,7 +3199,7 @@ function VistaHorario({ soloLectura = false }) {
         </div>
 
         {editando && (
-          <div className="border-t border-gray-100 px-6 py-3 text-xs text-gray-400">
+          <div className="border-t border-gray-100 dark:border-gray-800 px-6 py-3 text-xs text-gray-400">
             Haz clic en cualquier celda para editar el nombre de la materia. Enter para confirmar, Esc para cancelar.
           </div>
         )}
@@ -3256,25 +3295,25 @@ function VistaUsuarios({ alumnos }) {
     alumnos.find((a) => a.id_alumno === id)?.nombre ?? "—";
 
   const campoSelect =
-    "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
+    "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25";
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight text-gray-900">Usuarios</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">Usuarios</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Cuentas de acceso a la pagina. Los padres se vinculan a un solo alumno.
         </p>
       </div>
 
       <form
         onSubmit={crear}
-        className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
+        className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 shadow-sm"
       >
-        <h3 className="mb-4 text-sm font-semibold text-gray-900">Nueva cuenta</h3>
+        <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-gray-100">Nueva cuenta</h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-500">Usuario</label>
+            <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">Usuario</label>
             <input
               type="text"
               value={form.usuario}
@@ -3284,7 +3323,7 @@ function VistaUsuarios({ alumnos }) {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-500">Contrasena</label>
+            <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">Contrasena</label>
             <input
               type="password"
               value={form.contrasena}
@@ -3294,7 +3333,7 @@ function VistaUsuarios({ alumnos }) {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-500">Rol</label>
+            <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">Rol</label>
             <select
               value={form.rol}
               onChange={(e) => setForm({ ...form, rol: e.target.value })}
@@ -3307,7 +3346,7 @@ function VistaUsuarios({ alumnos }) {
           </div>
           {form.rol === "padre" && (
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-gray-500">Alumno vinculado</label>
+              <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">Alumno vinculado</label>
               <select
                 value={form.id_alumno}
                 onChange={(e) => setForm({ ...form, id_alumno: e.target.value })}
@@ -3331,7 +3370,7 @@ function VistaUsuarios({ alumnos }) {
             !form.contrasena ||
             (form.rol === "padre" && !form.id_alumno)
           }
-          className="mt-4 inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+          className="mt-4 inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 dark:hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
         >
           {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
           Crear cuenta
@@ -3339,20 +3378,20 @@ function VistaUsuarios({ alumnos }) {
       </form>
 
       {error && (
-        <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</div>
+        <div className="rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-2.5 text-sm text-red-600 dark:text-red-400">{error}</div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-400">
+            <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 text-xs uppercase tracking-wide text-gray-400">
               <th className="px-4 py-3 font-medium">Usuario</th>
               <th className="px-4 py-3 font-medium">Rol</th>
               <th className="px-4 py-3 font-medium">Alumno vinculado</th>
               <th className="px-4 py-3 text-right font-medium">Acciones</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
             {cargando ? (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-400">
@@ -3369,19 +3408,19 @@ function VistaUsuarios({ alumnos }) {
               usuarios.map((u) => {
                 const soyYo = u.id_usuario === miSesion?.id;
                 return (
-                  <tr key={u.id_usuario} className="hover:bg-gray-50">
+                  <tr key={u.id_usuario} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                     <td className="px-4 py-3">
-                      <span className="font-medium text-gray-900">{u.usuario}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{u.usuario}</span>
                       {soyYo && (
                         <span className="ml-2 text-xs text-gray-400">(tu cuenta)</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="inline-block rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                      <span className="inline-block rounded-full bg-blue-50 dark:bg-blue-500/10 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300">
                         {NOMBRES_ROL[u.rol] || u.rol}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
                       {u.rol === "padre" ? nombreAlumno(u.id_alumno) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -3392,7 +3431,7 @@ function VistaUsuarios({ alumnos }) {
                             setCambiando(u);
                             setNuevaContrasena("");
                           }}
-                          className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                          className="rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                         >
                           Contrasena
                         </button>
@@ -3400,7 +3439,7 @@ function VistaUsuarios({ alumnos }) {
                           type="button"
                           disabled={soyYo}
                           onClick={() => setEliminando(u)}
-                          className="rounded-full border border-red-100 bg-white px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-gray-100 disabled:text-gray-300"
+                          className="rounded-full border border-red-100 dark:border-red-500/30 bg-white dark:bg-gray-900 px-3 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:cursor-not-allowed disabled:border-gray-100 dark:disabled:border-gray-800 disabled:text-gray-300 dark:disabled:text-gray-600"
                         >
                           Eliminar
                         </button>
@@ -3416,18 +3455,18 @@ function VistaUsuarios({ alumnos }) {
 
       {eliminando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Eliminar usuario</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Eliminar usuario</h3>
               <button
                 type="button"
                 onClick={() => setEliminando(null)}
-                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
               Se eliminara la cuenta <span className="font-medium">{eliminando.usuario}</span>.
               Esta persona dejara de poder entrar.
             </p>
@@ -3435,7 +3474,7 @@ function VistaUsuarios({ alumnos }) {
               <button
                 type="button"
                 onClick={() => setEliminando(null)}
-                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancelar
               </button>
@@ -3443,7 +3482,7 @@ function VistaUsuarios({ alumnos }) {
                 type="button"
                 onClick={confirmarEliminacion}
                 disabled={guardando}
-                className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
               >
                 {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
                 Eliminar
@@ -3455,18 +3494,18 @@ function VistaUsuarios({ alumnos }) {
 
       {cambiando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Cambiar contrasena</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Cambiar contrasena</h3>
               <button
                 type="button"
                 onClick={() => setCambiando(null)}
-                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="mb-3 text-sm text-gray-600">
+            <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
               Cuenta: <span className="font-medium">{cambiando.usuario}</span>
             </p>
             <input
@@ -3481,7 +3520,7 @@ function VistaUsuarios({ alumnos }) {
               <button
                 type="button"
                 onClick={() => setCambiando(null)}
-                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancelar
               </button>
@@ -3489,7 +3528,7 @@ function VistaUsuarios({ alumnos }) {
                 type="button"
                 onClick={guardarContrasena}
                 disabled={guardando || !nuevaContrasena}
-                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                className="inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
               >
                 {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
                 Guardar
@@ -3507,6 +3546,7 @@ function VistaUsuarios({ alumnos }) {
 /* ------------------------------------------------------------------ */
 
 export default function App() {
+  const [tema, setTema] = useState(temaInicial);
   const [autenticado, setAutenticado] = useState(isLoggedIn);
   const [sesion, setSesion] = useState(null);
   const [vista, setVista] = useState("credenciales");
@@ -3528,6 +3568,21 @@ export default function App() {
     setNotificacion(null);
     notifActivaRef.current = false;
   }, []);
+
+  useEffect(() => {
+    const raiz = document.documentElement;
+    const oscuro = tema === "oscuro";
+    raiz.classList.toggle("dark", oscuro);
+    raiz.style.colorScheme = oscuro ? "dark" : "light";
+    try {
+      localStorage.setItem(CLAVE_TEMA, tema);
+    } catch {}
+  }, [tema]);
+
+  const alternarTema = useCallback(
+    () => setTema((actual) => (actual === "oscuro" ? "claro" : "oscuro")),
+    []
+  );
 
   useEffect(() => {
     if (!autenticado) return;
@@ -3684,7 +3739,14 @@ export default function App() {
   }, []);
 
   if (!autenticado) {
-    return <LoginForm onLogin={manejarLogin} aviso={avisoSesion} />;
+    return (
+      <LoginForm
+        onLogin={manejarLogin}
+        aviso={avisoSesion}
+        tema={tema}
+        onCambiarTema={alternarTema}
+      />
+    );
   }
 
   // Vistas permitidas para el rol y redireccion si la actual no aplica
@@ -3702,16 +3764,16 @@ export default function App() {
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-white font-sans text-gray-900 md:flex-row">
-      <aside className="flex flex-col border-b border-gray-100 bg-white md:w-64 md:border-b-0 md:border-r">
-        <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-6">
+    <div className="flex min-h-screen flex-col bg-white dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 md:flex-row">
+      <aside className="flex flex-col border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 md:w-64 md:border-b-0 md:border-r">
+        <div className="flex items-center gap-3 border-b border-gray-100 dark:border-gray-800 px-6 py-6">
           <img
             src="/magnoliaslogo.jpeg"
             alt="Magnolias"
             className="h-10 w-10 rounded-xl object-cover"
           />
           <div>
-            <p className="text-base font-semibold tracking-tight text-gray-900">Calificaciones</p>
+            <p className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">Calificaciones</p>
             <p className="text-xs text-gray-400">Ciclo escolar 2026</p>
           </div>
         </div>
@@ -3725,16 +3787,16 @@ export default function App() {
                 type="button"
                 onClick={() => setVista(v.id)}
                 className={`flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium md:w-full ${
-                  activa ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                  activa ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
-                <Icono className={`h-4 w-4 shrink-0 ${activa ? "text-blue-600" : "text-gray-400"}`} />
+                <Icono className={`h-4 w-4 shrink-0 ${activa ? "text-blue-600 dark:text-blue-400" : "text-gray-400"}`} />
                 <span className="whitespace-nowrap">{v.nombre}</span>
               </button>
             );
           })}
         </nav>
-        <div className="border-t border-gray-100 px-3 py-3">
+        <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-3">
           <div className="mb-2 px-3">
             <p className="truncate text-xs text-gray-400">
               {sesion?.usuario} · {NOMBRES_ROL[rol] ?? rol}
@@ -3743,7 +3805,7 @@ export default function App() {
           <button
             type="button"
             onClick={manejarLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-500 hover:bg-red-50"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
           >
             <LogOut className="h-4 w-4 shrink-0" />
             <span className="whitespace-nowrap">Cerrar sesion</span>
@@ -3752,10 +3814,11 @@ export default function App() {
       </aside>
 
       <div className="flex flex-1 flex-col">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-white px-8 py-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{vistaActual?.nombre}</h1>
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 px-8 py-6">
+          <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">{vistaActual?.nombre}</h1>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-1.5 text-sm font-medium text-blue-700">
+            <BotonTema tema={tema} onCambiar={alternarTema} />
+            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-1.5 text-sm font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
               <Calendar className="h-4 w-4" />
               Semana de trabajo actual: semana {semanaActual()}
             </span>
@@ -3763,16 +3826,16 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto bg-gray-50 px-8 py-8">
+        <main className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-950 px-8 py-8">
           {cargando ? (
             <LoadingScreen />
           ) : errorCarga ? (
-            <div className="mx-auto max-w-md rounded-2xl border border-red-100 bg-white p-6 text-center shadow-sm">
-              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red-50">
-                <X className="h-5 w-5 text-red-500" />
+            <div className="mx-auto max-w-md rounded-2xl border border-red-100 dark:border-red-500/30 bg-white dark:bg-gray-900 p-6 text-center shadow-sm">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
+                <X className="h-5 w-5 text-red-500 dark:text-red-400" />
               </div>
-              <h3 className="text-sm font-semibold text-gray-900">No se pudieron cargar los datos</h3>
-              <p className="mt-1 text-sm text-gray-500">{errorCarga}</p>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">No se pudieron cargar los datos</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{errorCarga}</p>
               <button
                 type="button"
                 onClick={() => {
