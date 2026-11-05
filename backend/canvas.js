@@ -26,13 +26,32 @@ function normalizar(texto) {
     .trim();
 }
 
+// Canvas puede devolver el nombre de un curso como objeto en respuestas
+// atipicas; aceptamos solo texto (o un objeto que traiga el nombre dentro).
+function textoCurso(valor) {
+  if (typeof valor === "string") return valor.trim();
+  if (valor && typeof valor === "object") {
+    for (const clave of ["name", "nombre", "title", "titulo"]) {
+      if (typeof valor[clave] === "string" && valor[clave].trim()) {
+        return valor[clave].trim();
+      }
+    }
+  }
+  return "";
+}
+
+function nombreMateriaValido(nombre) {
+  const texto = typeof nombre === "string" ? nombre.trim() : "";
+  return !!texto && !/^\[object \w+\]$/i.test(texto);
+}
+
 /* ---------------------------------------------------------------- */
 /*  Mapeo Canvas -> catalogo de Magnolias                            */
 /* ---------------------------------------------------------------- */
 
 // "Ingles III (CEM)" -> "ingles iii"
 function limpiarCurso(nombre) {
-  return normalizar(nombre).replace(/\s*\([^)]*\)\s*$/, "").trim();
+  return normalizar(textoCurso(nombre)).replace(/\s*\([^)]*\)\s*$/, "").trim();
 }
 
 function tokens(texto) {
@@ -49,10 +68,16 @@ function emparejarCursoExacto(nombreCurso, candidatas) {
 
 // "Emprendimiento II (CEM)" -> "Emprendimiento II" (conserva acentos/mayusculas)
 function nombreMateriaDesdeCurso(nombreCurso) {
-  return String(nombreCurso || "")
-    .trim()
+  return textoCurso(nombreCurso)
     .replace(/\s*\([^)]*\)\s*$/, "")
     .trim();
+}
+
+// Cursos institucionales de Canvas (p. ej. "Curso: Mi compromiso con la
+// Integridad Academica") no son materias: su course_code repite el nombre.
+function esCursoInstitucional(curso, nombre) {
+  if (!normalizar(nombre).startsWith("curso:")) return false;
+  return normalizar(curso && curso.course_code) === normalizar(nombre);
 }
 
 function emparejarCurso(nombreCurso, candidatas) {
@@ -269,24 +294,32 @@ async function sincronizarAlumno(pool, alumno, datos) {
   //   4) crea la materia nueva y la auto-inscribe
   const cursosMatch = [];
   for (const c of cursosCanvas) {
-    let mat = emparejarCursoExacto(c.name, materiasInscritas);
+    const nombreCurso = textoCurso(c && c.name);
+    if (!nombreCurso) {
+      resultado.cursos_sin_match.push(c && c.id ? String(c.id) : "curso sin nombre");
+      continue;
+    }
+    if (esCursoInstitucional(c, nombreCurso)) continue;
+    let mat = emparejarCursoExacto(nombreCurso, materiasInscritas);
     if (!mat && catalogo) {
-      mat = catalogo.buscarExacta(c.name);
+      mat = catalogo.buscarExacta(nombreCurso);
       if (mat && (await asegurarInscripcion(pool, alumno.id_alumno, mat.id_materia))) {
         resultado.inscripciones_creadas++;
       }
     }
-    if (!mat) mat = emparejarCurso(c.name, materiasInscritas);
+    if (!mat) mat = emparejarCurso(nombreCurso, materiasInscritas);
     if (!mat && catalogo) {
-      const r = await catalogo.asegurar(pool, c.name);
-      mat = r.materia;
-      if (r.creada) resultado.materias_creadas.push(mat.nombre);
-      if (await asegurarInscripcion(pool, alumno.id_alumno, mat.id_materia)) {
-        resultado.inscripciones_creadas++;
+      const r = await catalogo.asegurar(pool, nombreCurso);
+      mat = r && r.materia ? r.materia : null;
+      if (mat) {
+        if (r.creada) resultado.materias_creadas.push(mat.nombre);
+        if (await asegurarInscripcion(pool, alumno.id_alumno, mat.id_materia)) {
+          resultado.inscripciones_creadas++;
+        }
       }
     }
     if (mat) cursosMatch.push({ curso: c, materia: mat });
-    else resultado.cursos_sin_match.push(c.name);
+    else resultado.cursos_sin_match.push(nombreCurso);
   }
 
   for (const { curso, materia } of cursosMatch) {
@@ -452,12 +485,13 @@ function crearCatalogo(pool, materias) {
 
   function asegurar(nombreCurso) {
     const tarea = async () => {
-      const limpio = limpiarCurso(nombreCurso);
+      const nombre = nombreMateriaDesdeCurso(nombreCurso);
+      if (!nombreMateriaValido(nombre)) return { materia: null, creada: false };
+      const limpio = limpiarCurso(nombre);
+      if (!limpio) return { materia: null, creada: false };
       const ya = cache.get(limpio);
       if (ya) return { materia: ya, creada: false };
 
-      const nombre =
-        nombreMateriaDesdeCurso(nombreCurso) || String(nombreCurso || "").trim();
       const ins = await pool.query(
         `INSERT INTO materias (nombre) VALUES ($1)
          ON CONFLICT (nombre) DO NOTHING
@@ -845,6 +879,9 @@ module.exports = {
   sincronizarTodo,
   obtenerAdjuntos,
   normalizar,
+  textoCurso,
+  nombreMateriaValido,
+  esCursoInstitucional,
   limpiarCurso,
   emparejarCurso,
   emparejarCursoExacto,

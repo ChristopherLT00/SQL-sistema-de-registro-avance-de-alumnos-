@@ -159,6 +159,11 @@ function normalizarTexto(texto) {
     .trim();
 }
 
+function nombreMateriaSeguro(nombre) {
+  const texto = typeof nombre === "string" ? nombre.trim() : "";
+  return texto && !/^\[object \w+\]$/i.test(texto) ? texto : "Materia";
+}
+
 function formatearFecha(iso) {
   if (!iso) return null;
   try {
@@ -2453,7 +2458,7 @@ function VistaMatriz({ alumnos, materias, inscripciones, progreso, notasMateria,
               id_materia: i.id_materia,
             };
           });
-          return { id_alumno: i.id_alumno, id_materia: i.id_materia, materiaNombre: materia?.nombre ?? "Materia", celdas };
+          return { id_alumno: i.id_alumno, id_materia: i.id_materia, materiaNombre: nombreMateriaSeguro(materia?.nombre), celdas };
         });
 
       // alumno en riesgo: alguna materia con calificacion global < 70
@@ -3820,7 +3825,7 @@ export default function App() {
         role={menuAbierto ? "dialog" : undefined}
         aria-modal={menuAbierto ? "true" : undefined}
         aria-label="Menu de navegacion"
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col overflow-y-auto overscroll-contain border-r border-gray-100 bg-white transition-[transform,visibility] duration-200 dark:border-gray-800 dark:bg-gray-900 lg:static lg:z-auto lg:w-64 lg:translate-x-0 lg:visible lg:transition-none ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] shrink-0 flex-col overflow-y-auto overscroll-contain border-r border-gray-100 bg-white transition-[transform,visibility] duration-200 dark:border-gray-800 dark:bg-gray-900 lg:static lg:z-auto lg:w-64 lg:translate-x-0 lg:visible lg:transition-none ${
           menuAbierto ? "visible translate-x-0" : "invisible -translate-x-full"
         }`}
       >
@@ -3887,7 +3892,7 @@ export default function App() {
         </div>
       </aside>
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-4 lg:gap-4 lg:px-8 lg:py-6">
           <div className="flex min-w-0 items-center gap-2">
             <button

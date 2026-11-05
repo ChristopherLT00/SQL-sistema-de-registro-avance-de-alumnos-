@@ -176,7 +176,11 @@ app.get("/api/materias", async (req, res) => {
 app.post("/api/materias", soloAdmin, async (req, res) => {
   try {
     const { nombre } = req.body;
-    if (!nombre || !nombre.trim()) {
+    if (
+      typeof nombre !== "string" ||
+      !nombre.trim() ||
+      /^\[object \w+\]$/i.test(nombre.trim())
+    ) {
       return res.status(400).json({ error: "Nombre es requerido" });
     }
     const existing = await pool.query("SELECT * FROM materias WHERE LOWER(nombre) = LOWER($1)", [nombre.trim()]);
