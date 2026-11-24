@@ -41,6 +41,7 @@ export function obtenerSesion() {
       usuario: payload.usuario ?? "",
       rol: payload.rol || "admin",
       id_alumno: payload.id_alumno ?? null,
+      id_alumno_c: payload.id_alumno_c ?? null,
     };
   } catch {
     return null;
@@ -295,11 +296,11 @@ export async function fetchUsuarios() {
   return res.json();
 }
 
-export async function createUsuario({ usuario, contrasena, rol, id_alumno }) {
+export async function createUsuario({ usuario, contrasena, rol, id_alumno, id_alumno_c }) {
   const res = await fetch(`${API}/usuarios`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ usuario, contrasena, rol, id_alumno }),
+    body: JSON.stringify({ usuario, contrasena, rol, id_alumno, id_alumno_c }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -308,11 +309,11 @@ export async function createUsuario({ usuario, contrasena, rol, id_alumno }) {
   return res.json();
 }
 
-export async function updateUsuario(id, { contrasena, rol, id_alumno }) {
+export async function updateUsuario(id, { contrasena, rol, id_alumno, id_alumno_c }) {
   const res = await fetch(`${API}/usuarios/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ contrasena, rol, id_alumno }),
+    body: JSON.stringify({ contrasena, rol, id_alumno, id_alumno_c }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -329,6 +330,128 @@ export async function deleteUsuario(id) {
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || "Error al eliminar usuario");
+  }
+  return res.json();
+}
+
+/* ------------------------------------------------------------------ */
+/*  Grupo C: conteo de paginas de libros                               */
+/* ------------------------------------------------------------------ */
+
+export async function fetchGrupoCDatos() {
+  const res = await fetch(`${API}/grupo-c/datos`, { headers: authHeaders() });
+  if (!res.ok) fallo(res, "Error al obtener los datos de Grupo C");
+  return res.json();
+}
+
+export async function fetchGrupoCAlumnos() {
+  const res = await fetch(`${API}/grupo-c/alumnos`, { headers: authHeaders() });
+  if (!res.ok) fallo(res, "Error al obtener los alumnos de Grupo C");
+  return res.json();
+}
+
+export async function createGrupoCAlumno(nombre) {
+  const res = await fetch(`${API}/grupo-c/alumnos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ nombre }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al crear alumno de Grupo C");
+  }
+  return res.json();
+}
+
+export async function updateGrupoCAlumno(id, nombre) {
+  const res = await fetch(`${API}/grupo-c/alumnos/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ nombre }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al actualizar alumno de Grupo C");
+  }
+  return res.json();
+}
+
+export async function deleteGrupoCAlumno(id) {
+  const res = await fetch(`${API}/grupo-c/alumnos/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al eliminar alumno de Grupo C");
+  }
+  return res.json();
+}
+
+export async function createGrupoCMateria(nombre) {
+  const res = await fetch(`${API}/grupo-c/materias`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ nombre }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al crear materia de Grupo C");
+  }
+  return res.json();
+}
+
+export async function updateGrupoCMateria(id, nombre) {
+  const res = await fetch(`${API}/grupo-c/materias/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ nombre }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al actualizar materia de Grupo C");
+  }
+  return res.json();
+}
+
+export async function deleteGrupoCMateria(id) {
+  const res = await fetch(`${API}/grupo-c/materias/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al eliminar materia de Grupo C");
+  }
+  return res.json();
+}
+
+export async function guardarGrupoCInscripciones(idAlumnoC, materias) {
+  const res = await fetch(`${API}/grupo-c/inscripciones/${idAlumnoC}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ materias }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al asignar materias de Grupo C");
+  }
+  return res.json();
+}
+
+export async function ajustarGrupoCPaginas(idAlumnoC, idMateriaC, delta) {
+  const res = await fetch(`${API}/grupo-c/paginas/ajustar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({
+      id_alumno_c: idAlumnoC,
+      id_materia_c: idMateriaC,
+      delta,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al actualizar el conteo de paginas");
   }
   return res.json();
 }

@@ -54,6 +54,12 @@ function alumnoDelToken(req) {
   return req.usuario?.rol === "padre" ? req.usuario.id_alumno ?? -1 : null;
 }
 
+// Para alumnos de Grupo C: solo pueden ver su propio registro
+function alumnoCDelToken(req) {
+  if (req.usuario?.rol !== "alumno_c") return null;
+  return req.usuario.id_alumno_c ?? null;
+}
+
 app.post("/api/login", async (req, res) => {
   try {
     const { usuario, contrasena } = req.body;
@@ -68,17 +74,37 @@ app.post("/api/login", async (req, res) => {
     }
     const rol = user.rol || "admin";
     const token = jwt.sign(
-      { id: user.id_usuario, usuario: user.usuario, rol, id_alumno: user.id_alumno ?? null },
+      {
+        id: user.id_usuario,
+        usuario: user.usuario,
+        rol,
+        id_alumno: user.id_alumno ?? null,
+        id_alumno_c: user.id_alumno_c ?? null,
+      },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
-    res.json({ token, rol, id_alumno: user.id_alumno ?? null });
+    res.json({
+      token,
+      rol,
+      id_alumno: user.id_alumno ?? null,
+      id_alumno_c: user.id_alumno_c ?? null,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 app.use("/api", autenticar);
+
+// Los roles de Grupo C viven aislados: solo pueden usar /api/grupo-c/*
+app.use("/api", (req, res, next) => {
+  const rol = req.usuario?.rol;
+  if ((rol === "profesor_c" || rol === "alumno_c") && !req.path.startsWith("/grupo-c")) {
+    return res.status(403).json({ error: "Solo tienes acceso a la seccion Grupo C" });
+  }
+  next();
+});
 
 /* ------------------------------------------------------------------ */
 /*  Alumnos                                                            */
@@ -272,6 +298,252 @@ app.put("/api/inscripciones/lote", soloAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/*  Grupo C: conteo de paginas de libros (independiente de Canvas)     */
+/* ------------------------------------------------------------------ */
+
+const verGrupoC = requiereRol("admin", "profesor_c", "alumno_c");
+const editarGrupoC = requiereRol("admin", "profesor_c");
+
+function nombreGrupoC(valor) {
+  const texto = typeof valor === "string" ? valor.trim() : "";
+  return texto && texto.length <= 150 ? texto : null;
+}
+
+function idGrupoC(valor) {
+  const n = Number(valor);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+app.get("/api/grupo-c/alumnos", verGrupoC, async (req, res) => {
+  try {
+    const soloAlumnoC = alumnoCDelToken(req);
+    if (req.usuario.rol === "alumno_c" && !soloAlumnoC) {
+      return res.status(403).json({ error: "Tu cuenta no esta vinculada a un alumno de Grupo C" });
+    }
+    const result = soloAlumnoC
+      ? await pool.query(
+          "SELECT id_alumno_c, nombre FROM grupo_c_alumnos WHERE id_alumno_c = $1",
+          [soloAlumnoC]
+        )
+      : await pool.query("SELECT id_alumno_c, nombre FROM grupo_c_alumnos ORDER BY nombre");
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/grupo-c/datos", verGrupoC, async (req, res) => {
+  try {
+    const soloAlumnoC = alumnoCDelToken(req);
+    if (req.usuario.rol === "alumno_c" && !soloAlumnoC) {
+      return res.status(403).json({ error: "Tu cuenta no esta vinculada a un alumno de Grupo C" });
+    }
+    const filtro = soloAlumnoC ? "WHERE id_alumno_c = $1" : "";
+    const params = soloAlumnoC ? [soloAlumnoC] : [];
+
+    const [alumnos, inscripciones, paginas] = await Promise.all([
+      pool.query(`SELECT id_alumno_c, nombre FROM grupo_c_alumnos ${filtro} ORDER BY nombre`, params),
+      pool.query(
+        `SELECT id_alumno_c, id_materia_c FROM grupo_c_inscripciones ${filtro}
+         ORDER BY id_alumno_c, id_materia_c`,
+        params
+      ),
+      pool.query(
+        `SELECT id_alumno_c, id_materia_c, paginas, actualizado_en
+         FROM grupo_c_paginas ${filtro} ORDER BY id_alumno_c, id_materia_c`,
+        params
+      ),
+    ]);
+
+    const materias = soloAlumnoC
+      ? await pool.query(
+          `SELECT m.id_materia_c, m.nombre
+           FROM grupo_c_materias m
+           JOIN grupo_c_inscripciones i ON i.id_materia_c = m.id_materia_c
+           WHERE i.id_alumno_c = $1
+           ORDER BY m.nombre`,
+          [soloAlumnoC]
+        )
+      : await pool.query("SELECT id_materia_c, nombre FROM grupo_c_materias ORDER BY nombre");
+
+    res.json({
+      alumnos: alumnos.rows,
+      materias: materias.rows,
+      inscripciones: inscripciones.rows,
+      paginas: paginas.rows,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/grupo-c/alumnos", editarGrupoC, async (req, res) => {
+  try {
+    const nombre = nombreGrupoC(req.body.nombre);
+    if (!nombre) return res.status(400).json({ error: "El nombre es requerido" });
+    const result = await pool.query(
+      "INSERT INTO grupo_c_alumnos (nombre) VALUES ($1) RETURNING id_alumno_c, nombre",
+      [nombre]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/grupo-c/alumnos/:id", editarGrupoC, async (req, res) => {
+  try {
+    const id = idGrupoC(req.params.id);
+    const nombre = nombreGrupoC(req.body.nombre);
+    if (!id || !nombre) return res.status(400).json({ error: "Datos invalidos" });
+    const result = await pool.query(
+      "UPDATE grupo_c_alumnos SET nombre = $1 WHERE id_alumno_c = $2 RETURNING id_alumno_c, nombre",
+      [nombre, id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Alumno no encontrado" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/grupo-c/alumnos/:id", editarGrupoC, async (req, res) => {
+  try {
+    const id = idGrupoC(req.params.id);
+    if (!id) return res.status(400).json({ error: "Id invalido" });
+    const result = await pool.query(
+      "DELETE FROM grupo_c_alumnos WHERE id_alumno_c = $1 RETURNING id_alumno_c, nombre",
+      [id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Alumno no encontrado" });
+    res.json({ success: true, alumno: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/grupo-c/materias", editarGrupoC, async (req, res) => {
+  try {
+    const nombre = nombreGrupoC(req.body.nombre);
+    if (!nombre) return res.status(400).json({ error: "El nombre es requerido" });
+    const result = await pool.query(
+      "INSERT INTO grupo_c_materias (nombre) VALUES ($1) RETURNING id_materia_c, nombre",
+      [nombre]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    if (err.code === "23505") {
+      return res.status(400).json({ error: "Ya existe una materia con ese nombre" });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/grupo-c/materias/:id", editarGrupoC, async (req, res) => {
+  try {
+    const id = idGrupoC(req.params.id);
+    const nombre = nombreGrupoC(req.body.nombre);
+    if (!id || !nombre) return res.status(400).json({ error: "Datos invalidos" });
+    const result = await pool.query(
+      "UPDATE grupo_c_materias SET nombre = $1 WHERE id_materia_c = $2 RETURNING id_materia_c, nombre",
+      [nombre, id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Materia no encontrada" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    if (err.code === "23505") {
+      return res.status(400).json({ error: "Ya existe una materia con ese nombre" });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/grupo-c/materias/:id", editarGrupoC, async (req, res) => {
+  try {
+    const id = idGrupoC(req.params.id);
+    if (!id) return res.status(400).json({ error: "Id invalido" });
+    const result = await pool.query(
+      "DELETE FROM grupo_c_materias WHERE id_materia_c = $1 RETURNING id_materia_c, nombre",
+      [id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Materia no encontrada" });
+    res.json({ success: true, materia: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/grupo-c/inscripciones/:id", editarGrupoC, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const idAlumnoC = idGrupoC(req.params.id);
+    const materias = Array.isArray(req.body.materias)
+      ? [...new Set(req.body.materias.map(idGrupoC).filter(Boolean))]
+      : null;
+    if (!idAlumnoC || !materias) {
+      return res.status(400).json({ error: "Faltan parametros: alumno y materias[]" });
+    }
+    const existe = await client.query(
+      "SELECT 1 FROM grupo_c_alumnos WHERE id_alumno_c = $1",
+      [idAlumnoC]
+    );
+    if (existe.rowCount === 0) return res.status(404).json({ error: "Alumno no encontrado" });
+
+    await client.query("BEGIN");
+    await client.query("DELETE FROM grupo_c_inscripciones WHERE id_alumno_c = $1", [idAlumnoC]);
+    for (const idMateriaC of materias) {
+      await client.query(
+        "INSERT INTO grupo_c_inscripciones (id_alumno_c, id_materia_c) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        [idAlumnoC, idMateriaC]
+      );
+    }
+    await client.query("COMMIT");
+    const result = await pool.query(
+      "SELECT id_alumno_c, id_materia_c FROM grupo_c_inscripciones WHERE id_alumno_c = $1",
+      [idAlumnoC]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/grupo-c/paginas/ajustar", editarGrupoC, async (req, res) => {
+  try {
+    const idAlumnoC = idGrupoC(req.body.id_alumno_c);
+    const idMateriaC = idGrupoC(req.body.id_materia_c);
+    const delta = Number(req.body.delta);
+    if (!idAlumnoC || !idMateriaC || !Number.isInteger(delta) || delta === 0) {
+      return res.status(400).json({ error: "Datos invalidos" });
+    }
+
+    const asignada = await pool.query(
+      "SELECT 1 FROM grupo_c_inscripciones WHERE id_alumno_c = $1 AND id_materia_c = $2",
+      [idAlumnoC, idMateriaC]
+    );
+    if (asignada.rowCount === 0) {
+      return res.status(400).json({ error: "La materia no esta asignada al alumno" });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO grupo_c_paginas (id_alumno_c, id_materia_c, paginas, actualizado_en)
+       VALUES ($1, $2, GREATEST($3, 0), now())
+       ON CONFLICT (id_alumno_c, id_materia_c)
+       DO UPDATE SET paginas = GREATEST(grupo_c_paginas.paginas + $3, 0),
+                     actualizado_en = now()
+       RETURNING id_alumno_c, id_materia_c, paginas, actualizado_en`,
+      [idAlumnoC, idMateriaC, delta]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -584,12 +856,15 @@ app.post("/api/canvas/sync", soloAdmin, async (req, res) => {
 /*  Usuarios (solo admin)                                              */
 /* ------------------------------------------------------------------ */
 
-const ROLES_VALIDOS = ["admin", "direccion", "padre"];
+const ROLES_VALIDOS = ["admin", "direccion", "padre", "profesor_c", "alumno_c"];
 
-function validarUsuario({ usuario, contrasena, rol, id_alumno }) {
+function validarUsuario({ usuario, contrasena, rol, id_alumno, id_alumno_c }) {
   if (!usuario || !String(usuario).trim()) return "El usuario es requerido";
   if (rol !== undefined && !ROLES_VALIDOS.includes(rol)) return "Rol invalido";
   if (rol === "padre" && !id_alumno) return "El rol padre requiere un alumno vinculado";
+  if (rol === "alumno_c" && !id_alumno_c) {
+    return "El rol alumno de Grupo C requiere un alumno vinculado";
+  }
   if (contrasena !== undefined && contrasena !== null && String(contrasena).length < 4) {
     return "La contrasena debe tener al menos 4 caracteres";
   }
@@ -598,12 +873,26 @@ function validarUsuario({ usuario, contrasena, rol, id_alumno }) {
 
 app.get("/api/usuarios", soloAdmin, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT u.id_usuario, u.usuario, u.rol, u.id_alumno, a.nombre AS alumno_nombre
-       FROM usuarios u
-       LEFT JOIN alumnos a ON a.id_alumno = u.id_alumno
-       ORDER BY u.id_usuario`
-    );
+    let result;
+    try {
+      result = await pool.query(
+        `SELECT u.id_usuario, u.usuario, u.rol, u.id_alumno, u.id_alumno_c,
+                a.nombre AS alumno_nombre, gc.nombre AS grupo_c_nombre
+         FROM usuarios u
+         LEFT JOIN alumnos a ON a.id_alumno = u.id_alumno
+         LEFT JOIN grupo_c_alumnos gc ON gc.id_alumno_c = u.id_alumno_c
+         ORDER BY u.id_usuario`
+      );
+    } catch (err) {
+      // Si aun no se corrio el SQL de Grupo C, la app sigue funcionando.
+      if (err.code !== "42703" && err.code !== "42P01") throw err;
+      result = await pool.query(
+        `SELECT u.id_usuario, u.usuario, u.rol, u.id_alumno, a.nombre AS alumno_nombre
+         FROM usuarios u
+         LEFT JOIN alumnos a ON a.id_alumno = u.id_alumno
+         ORDER BY u.id_usuario`
+      );
+    }
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -612,8 +901,14 @@ app.get("/api/usuarios", soloAdmin, async (req, res) => {
 
 app.post("/api/usuarios", soloAdmin, async (req, res) => {
   try {
-    const { usuario, contrasena, rol = "admin", id_alumno = null } = req.body;
-    const error = validarUsuario({ usuario, contrasena, rol, id_alumno });
+    const {
+      usuario,
+      contrasena,
+      rol = "admin",
+      id_alumno = null,
+      id_alumno_c = null,
+    } = req.body;
+    const error = validarUsuario({ usuario, contrasena, rol, id_alumno, id_alumno_c });
     if (error) return res.status(400).json({ error });
     if (!contrasena) return res.status(400).json({ error: "La contrasena es requerida" });
 
@@ -624,8 +919,10 @@ app.post("/api/usuarios", soloAdmin, async (req, res) => {
 
     const hash = await bcrypt.hash(String(contrasena), 10);
     const result = await pool.query(
-      "INSERT INTO usuarios (usuario, contrasena, rol, id_alumno) VALUES ($1, $2, $3, $4) RETURNING id_usuario, usuario, rol, id_alumno",
-      [String(usuario).trim(), hash, rol, id_alumno]
+      `INSERT INTO usuarios (usuario, contrasena, rol, id_alumno, id_alumno_c)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id_usuario, usuario, rol, id_alumno, id_alumno_c`,
+      [String(usuario).trim(), hash, rol, id_alumno, id_alumno_c]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -636,12 +933,12 @@ app.post("/api/usuarios", soloAdmin, async (req, res) => {
 app.put("/api/usuarios/:id", soloAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { contrasena, rol, id_alumno } = req.body;
+    const { contrasena, rol, id_alumno, id_alumno_c } = req.body;
     const propio = Number(id) === Number(req.usuario.id);
     if (propio && rol !== undefined && rol !== "admin") {
       return res.status(400).json({ error: "No puedes cambiar tu propio rol" });
     }
-    const error = validarUsuario({ usuario: "x", rol, id_alumno });
+    const error = validarUsuario({ usuario: "x", rol, id_alumno, id_alumno_c });
     if (error) return res.status(400).json({ error });
 
     const campos = [];
@@ -658,11 +955,16 @@ app.put("/api/usuarios/:id", soloAdmin, async (req, res) => {
       params.push(id_alumno);
       campos.push(`id_alumno = $${params.length}`);
     }
+    if (id_alumno_c !== undefined) {
+      params.push(id_alumno_c);
+      campos.push(`id_alumno_c = $${params.length}`);
+    }
     if (campos.length === 0) return res.status(400).json({ error: "Nada que actualizar" });
 
     params.push(id);
     const result = await pool.query(
-      `UPDATE usuarios SET ${campos.join(", ")} WHERE id_usuario = $${params.length} RETURNING id_usuario, usuario, rol, id_alumno`,
+      `UPDATE usuarios SET ${campos.join(", ")} WHERE id_usuario = $${params.length}
+       RETURNING id_usuario, usuario, rol, id_alumno, id_alumno_c`,
       params
     );
     if (result.rowCount === 0) return res.status(404).json({ error: "Usuario no encontrado" });

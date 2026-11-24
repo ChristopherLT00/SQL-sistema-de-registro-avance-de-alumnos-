@@ -33,6 +33,8 @@ import {
   UserCog,
   Trash2,
   Paperclip,
+  Plus,
+  Minus,
 } from "lucide-react";
 import {
   fetchAlumnos,
@@ -60,6 +62,16 @@ import {
   updateUsuario,
   deleteUsuario,
   fetchEntregas,
+  fetchGrupoCDatos,
+  fetchGrupoCAlumnos,
+  createGrupoCAlumno,
+  updateGrupoCAlumno,
+  deleteGrupoCAlumno,
+  createGrupoCMateria,
+  updateGrupoCMateria,
+  deleteGrupoCMateria,
+  guardarGrupoCInscripciones,
+  ajustarGrupoCPaginas,
 } from "./api";
 import { generarPDFAvance, generarPDFMatriz, generarPDFHorario } from "./pdf";
 import { generarExcelAvance, generarExcelMatriz } from "./excel";
@@ -101,6 +113,7 @@ const VISTAS = [
   { id: "registro", nombre: "Registro semanal", icon: ClipboardList },
   { id: "avance", nombre: "Avance individual", icon: UserSearch },
   { id: "matriz", nombre: "Matriz general", icon: Table2 },
+  { id: "grupo-c", nombre: "Grupo C", icon: BookOpen },
   { id: "auditoria", nombre: "Auditoria", icon: ScrollText },
   { id: "usuarios", nombre: "Usuarios", icon: UserCog },
   { id: "horario", nombre: "Horario escolar", icon: Calendar },
@@ -108,15 +121,19 @@ const VISTAS = [
 
 // Vistas visibles por rol (la autenticacion de verdad es en el backend)
 const VISTAS_POR_ROL = {
-  admin: ["credenciales", "registro", "avance", "matriz", "auditoria", "usuarios", "horario"],
+  admin: ["credenciales", "registro", "avance", "matriz", "grupo-c", "auditoria", "usuarios", "horario"],
   direccion: ["avance", "matriz", "horario"],
   padre: ["avance", "matriz", "horario"],
+  profesor_c: ["grupo-c"],
+  alumno_c: ["grupo-c"],
 };
 
 const NOMBRES_ROL = {
   admin: "Administrador",
   direccion: "Direccion",
   padre: "Padre",
+  profesor_c: "Profesor Grupo C",
+  alumno_c: "Alumno Grupo C",
 };
 
 // Inicio del ciclo: lunes 7 de septiembre de 2026 (semana 1 de trabajo)
@@ -3220,14 +3237,919 @@ function VistaHorario({ soloLectura = false }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Grupo C: conteo de paginas de libros de texto                      */
+/* ------------------------------------------------------------------ */
+
+function ContadorPaginas({ cantidad, onSumar, onRestar, puedeEditar, etiqueta }) {
+  if (!puedeEditar) {
+    return <span className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">{cantidad}</span>;
+  }
+  const base =
+    "flex h-10 w-10 items-center justify-center rounded-full border text-gray-600 transition-colors disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300";
+  return (
+    <div className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        onClick={onRestar}
+        disabled={cantidad <= 0}
+        aria-label={`Restar una pagina a ${etiqueta}`}
+        className={`${base} border-gray-200 bg-white hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-white`}
+      >
+        <Minus className="h-4 w-4" />
+      </button>
+      <span className="min-w-9 text-center text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+        {cantidad}
+      </span>
+      <button
+        type="button"
+        onClick={onSumar}
+        aria-label={`Sumar una pagina a ${etiqueta}`}
+        className={`${base} border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20`}
+      >
+        <Plus className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+function GrupoCIndividual({ alumno, materias, paginas, puedeEditar, onAjustar, onAsignar }) {
+  const total = materias.reduce((suma, m) => suma + paginas(m.id_materia_c), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">{alumno.nombre}</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {materias.length} {materias.length === 1 ? "materia" : "materias"} · {total} páginas completadas
+            </p>
+          </div>
+          {puedeEditar && (
+            <button
+              type="button"
+              onClick={onAsignar}
+              className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              <BookOpen className="h-4 w-4" />
+              Asignar materias
+            </button>
+          )}
+        </div>
+
+        {materias.length === 0 ? (
+          <div className="mt-5 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+            Este alumno no tiene materias asignadas.
+            {puedeEditar && " Usa “Asignar materias” para comenzar."}
+          </div>
+        ) : (
+          <ul className="mt-4 divide-y divide-gray-100 dark:divide-gray-800">
+            {materias.map((materia) => {
+              const cantidad = paginas(materia.id_materia_c);
+              return (
+                <li key={materia.id_materia_c} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <span className="min-w-0 flex-1 text-sm font-medium text-gray-800 dark:text-gray-200">
+                    {nombreMateriaSeguro(materia.nombre)}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">páginas</span>
+                    <ContadorPaginas
+                      cantidad={cantidad}
+                      etiqueta={`${materia.nombre} de ${alumno.nombre}`}
+                      puedeEditar={puedeEditar}
+                      onRestar={() => onAjustar(alumno.id_alumno_c, materia.id_materia_c, -1)}
+                      onSumar={() => onAjustar(alumno.id_alumno_c, materia.id_materia_c, 1)}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GrupoCTabla({ alumnos, materias, inscripciones, paginas, puedeEditar, onAjustar }) {
+  const datos = alumnos.map((alumno) => {
+    const asignadas = inscripciones
+      .filter((i) => i.id_alumno_c === alumno.id_alumno_c)
+      .map((i) => materias.find((m) => m.id_materia_c === i.id_materia_c))
+      .filter(Boolean);
+    const total = asignadas.reduce((suma, m) => suma + paginas(alumno.id_alumno_c, m.id_materia_c), 0);
+    return { alumno, asignadas, total };
+  });
+
+  if (alumnos.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+        Todavía no hay alumnos en Grupo C.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <table className="w-full min-w-[560px] text-left text-sm">
+        <thead>
+          <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:border-gray-800 dark:bg-gray-950">
+            <th className="px-4 py-3 font-medium">Alumno / materia</th>
+            <th className="px-4 py-3 text-center font-medium">Páginas</th>
+            <th className="px-4 py-3 text-right font-medium">Conteo</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+          {datos.map(({ alumno, asignadas, total }) => (
+            <Fragment key={alumno.id_alumno_c}>
+              <tr className="bg-gray-50/70 dark:bg-gray-950">
+                <td className="px-4 py-2.5 font-semibold text-gray-900 dark:text-gray-100">{alumno.nombre}</td>
+                <td className="px-4 py-2.5 text-center text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-200">
+                  {total}
+                </td>
+                <td className="px-4 py-2.5 text-right text-xs text-gray-400">total del alumno</td>
+              </tr>
+              {asignadas.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-4 py-3 text-xs text-gray-400">
+                    Sin materias asignadas.
+                  </td>
+                </tr>
+              ) : (
+                asignadas.map((materia) => {
+                  const cantidad = paginas(alumno.id_alumno_c, materia.id_materia_c);
+                  return (
+                    <tr key={materia.id_materia_c} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
+                      <td className="px-4 py-2.5 pl-8 text-gray-700 dark:text-gray-300">
+                        {nombreMateriaSeguro(materia.nombre)}
+                      </td>
+                      <td className="px-4 py-2.5 text-center text-base font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+                        {cantidad}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <ContadorPaginas
+                          cantidad={cantidad}
+                          etiqueta={`${materia.nombre} de ${alumno.nombre}`}
+                          puedeEditar={puedeEditar}
+                          onRestar={() => onAjustar(alumno.id_alumno_c, materia.id_materia_c, -1)}
+                          onSumar={() => onAjustar(alumno.id_alumno_c, materia.id_materia_c, 1)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GrupoCMatriz({ alumnos, materias, inscripciones, paginas }) {
+  const usadas = materias.filter((materia) =>
+    inscripciones.some((i) => i.id_materia_c === materia.id_materia_c)
+  );
+
+  if (alumnos.length === 0 || usadas.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+        Aún no hay materias asignadas para mostrar la matriz.
+      </div>
+    );
+  }
+
+  const totalPorMateria = new Map(
+    usadas.map((materia) => [
+      materia.id_materia_c,
+      alumnos.reduce((suma, alumno) => suma + paginas(alumno.id_alumno_c, materia.id_materia_c), 0),
+    ])
+  );
+
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <table className="w-full min-w-[720px] text-left text-sm">
+        <thead>
+          <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:border-gray-800 dark:bg-gray-950">
+            <th className="sticky left-0 z-10 bg-gray-50 px-4 py-3 font-medium dark:bg-gray-950">Alumno</th>
+            {usadas.map((materia) => (
+              <th key={materia.id_materia_c} className="whitespace-nowrap px-3 py-3 text-center font-medium">
+                {nombreMateriaSeguro(materia.nombre)}
+              </th>
+            ))}
+            <th className="px-4 py-3 text-center font-medium">Total</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+          {alumnos.map((alumno) => {
+            const total = usadas.reduce(
+              (suma, materia) => suma + paginas(alumno.id_alumno_c, materia.id_materia_c),
+              0
+            );
+            return (
+              <tr key={alumno.id_alumno_c} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
+                <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-4 py-3 font-medium text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+                  {alumno.nombre}
+                </td>
+                {usadas.map((materia) => {
+                  const asignada = inscripciones.some(
+                    (i) => i.id_alumno_c === alumno.id_alumno_c && i.id_materia_c === materia.id_materia_c
+                  );
+                  return (
+                    <td
+                      key={materia.id_materia_c}
+                      className="px-3 py-3 text-center tabular-nums text-gray-700 dark:text-gray-300"
+                    >
+                      {asignada ? paginas(alumno.id_alumno_c, materia.id_materia_c) : "—"}
+                    </td>
+                  );
+                })}
+                <td className="px-4 py-3 text-center font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+                  {total}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-gray-100 bg-gray-50 font-semibold text-gray-900 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100">
+            <td className="sticky left-0 z-10 bg-gray-50 px-4 py-3 dark:bg-gray-950">Total</td>
+            {usadas.map((materia) => (
+              <td key={materia.id_materia_c} className="px-3 py-3 text-center tabular-nums">
+                {totalPorMateria.get(materia.id_materia_c) ?? 0}
+              </td>
+            ))}
+            <td className="px-4 py-3 text-center tabular-nums">
+              {[...totalPorMateria.values()].reduce((suma, n) => suma + n, 0)}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+function ModalAdministrarGrupo({ alumnos, materias, onCerrar, onRecargar, onToast }) {
+  const [nuevoAlumno, setNuevoAlumno] = useState("");
+  const [nuevaMateria, setNuevaMateria] = useState("");
+  const [editandoAlumno, setEditandoAlumno] = useState(null);
+  const [editandoMateria, setEditandoMateria] = useState(null);
+  const [confirmar, setConfirmar] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const ejecutar = async (accion, mensaje) => {
+    setGuardando(true);
+    try {
+      await accion();
+      await onRecargar();
+      if (mensaje) onToast(mensaje);
+      return true;
+    } catch (err) {
+      onToast(err.message);
+      return false;
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const agregarAlumno = async (e) => {
+    e.preventDefault();
+    const nombre = nuevoAlumno.trim();
+    if (!nombre) return;
+    const ok = await ejecutar(() => createGrupoCAlumno(nombre), "Alumno agregado.");
+    if (ok) setNuevoAlumno("");
+  };
+
+  const agregarMateria = async (e) => {
+    e.preventDefault();
+    const nombre = nuevaMateria.trim();
+    if (!nombre) return;
+    const ok = await ejecutar(() => createGrupoCMateria(nombre), "Materia agregada.");
+    if (ok) setNuevaMateria("");
+  };
+
+  const guardarAlumno = async (alumno) => {
+    const nombre = String(editandoAlumno?.nombre ?? "").trim();
+    if (!nombre) return;
+    const ok = await ejecutar(
+      () => updateGrupoCAlumno(alumno.id_alumno_c, nombre),
+      "Alumno actualizado."
+    );
+    if (ok) setEditandoAlumno(null);
+  };
+
+  const guardarMateria = async (materia) => {
+    const nombre = String(editandoMateria?.nombre ?? "").trim();
+    if (!nombre) return;
+    const ok = await ejecutar(
+      () => updateGrupoCMateria(materia.id_materia_c, nombre),
+      "Materia actualizada."
+    );
+    if (ok) setEditandoMateria(null);
+  };
+
+  const eliminar = async () => {
+    if (!confirmar) return;
+    const ok = await ejecutar(
+      () =>
+        confirmar.tipo === "alumno"
+          ? deleteGrupoCAlumno(confirmar.id)
+          : deleteGrupoCMateria(confirmar.id),
+      confirmar.tipo === "alumno" ? "Alumno eliminado." : "Materia eliminada."
+    );
+    if (ok) setConfirmar(null);
+  };
+
+  const campo =
+    "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:bg-gray-800 dark:focus:ring-blue-500/25";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900 sm:p-6">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Administrar Grupo C</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Alumnos y materias disponibles para los conteos.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCerrar}
+            className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            aria-label="Cerrar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <section>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Alumnos</h4>
+            <form onSubmit={agregarAlumno} className="mt-2 flex gap-2">
+              <input
+                value={nuevoAlumno}
+                onChange={(e) => setNuevoAlumno(e.target.value)}
+                placeholder="Nombre del alumno"
+                className={campo}
+              />
+              <button
+                type="submit"
+                disabled={guardando || !nuevoAlumno.trim()}
+                className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </form>
+            <ul className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-100 dark:divide-gray-800 dark:border-gray-800">
+              {alumnos.map((alumno) => (
+                <li key={alumno.id_alumno_c} className="flex items-center gap-2 px-3 py-2">
+                  {editandoAlumno?.id === alumno.id_alumno_c ? (
+                    <>
+                      <input
+                        value={editandoAlumno.nombre}
+                        onChange={(e) => setEditandoAlumno({ ...editandoAlumno, nombre: e.target.value })}
+                        className={`${campo} py-1.5`}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => guardarAlumno(alumno)}
+                        disabled={guardando}
+                        className="rounded-full p-1.5 text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+                        aria-label="Guardar"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditandoAlumno(null)}
+                        className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        aria-label="Cancelar"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="min-w-0 flex-1 truncate text-sm text-gray-700 dark:text-gray-300">
+                        {alumno.nombre}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setEditandoAlumno({ id: alumno.id_alumno_c, nombre: alumno.nombre })}
+                        className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                        aria-label={`Editar ${alumno.nombre}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setConfirmar({ tipo: "alumno", id: alumno.id_alumno_c, nombre: alumno.nombre })
+                        }
+                        className="rounded-full p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
+                        aria-label={`Eliminar ${alumno.nombre}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Materias</h4>
+            <form onSubmit={agregarMateria} className="mt-2 flex gap-2">
+              <input
+                value={nuevaMateria}
+                onChange={(e) => setNuevaMateria(e.target.value)}
+                placeholder="Nombre de la materia"
+                className={campo}
+              />
+              <button
+                type="submit"
+                disabled={guardando || !nuevaMateria.trim()}
+                className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </form>
+            <ul className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-100 dark:divide-gray-800 dark:border-gray-800">
+              {materias.map((materia) => (
+                <li key={materia.id_materia_c} className="flex items-center gap-2 px-3 py-2">
+                  {editandoMateria?.id === materia.id_materia_c ? (
+                    <>
+                      <input
+                        value={editandoMateria.nombre}
+                        onChange={(e) => setEditandoMateria({ ...editandoMateria, nombre: e.target.value })}
+                        className={`${campo} py-1.5`}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => guardarMateria(materia)}
+                        disabled={guardando}
+                        className="rounded-full p-1.5 text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+                        aria-label="Guardar"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditandoMateria(null)}
+                        className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        aria-label="Cancelar"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="min-w-0 flex-1 truncate text-sm text-gray-700 dark:text-gray-300">
+                        {materia.nombre}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setEditandoMateria({ id: materia.id_materia_c, nombre: materia.nombre })}
+                        className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                        aria-label={`Editar ${materia.nombre}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setConfirmar({ tipo: "materia", id: materia.id_materia_c, nombre: materia.nombre })
+                        }
+                        className="rounded-full p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
+                        aria-label={`Eliminar ${materia.nombre}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+
+        {confirmar && (
+          <div className="mt-5 rounded-xl border border-red-100 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
+            <p className="text-sm text-red-700 dark:text-red-300">
+              ¿Eliminar {confirmar.tipo === "alumno" ? "al alumno" : "la materia"}{" "}
+              <strong>{confirmar.nombre}</strong>? Se borrarán sus asignaciones y conteos.
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmar(null)}
+                className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={eliminar}
+                disabled={guardando}
+                className="rounded-full bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ModalAsignarMaterias({ alumno, materias, asignadas, onCerrar, onGuardar }) {
+  const [seleccion, setSeleccion] = useState(() => new Set(asignadas));
+  const [guardando, setGuardando] = useState(false);
+
+  const toggle = (id) => {
+    setSeleccion((prev) => {
+      const siguiente = new Set(prev);
+      if (siguiente.has(id)) siguiente.delete(id);
+      else siguiente.add(id);
+      return siguiente;
+    });
+  };
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await onGuardar(alumno.id_alumno_c, [...seleccion]);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Materias de {alumno.nombre}</h3>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Si quitas una materia, su conteo se conserva y reaparece al volver a asignarla.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCerrar}
+            className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            aria-label="Cerrar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {materias.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+            Primero agrega materias en “Administrar grupo”.
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {materias.map((materia) => (
+              <li key={materia.id_materia_c}>
+                <label className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800">
+                  <input
+                    type="checkbox"
+                    checked={seleccion.has(materia.id_materia_c)}
+                    onChange={() => toggle(materia.id_materia_c)}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
+                  />
+                  {nombreMateriaSeguro(materia.nombre)}
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCerrar}
+            className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={guardar}
+            disabled={guardando || materias.length === 0}
+            className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:bg-blue-600 dark:hover:bg-blue-500 dark:disabled:bg-gray-700 dark:disabled:text-gray-500"
+          >
+            {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VistaGrupoC({ sesion }) {
+  const [datos, setDatos] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
+  const [seccion, setSeccion] = useState("individual");
+  const [alumnoSel, setAlumnoSel] = useState("");
+  const [asignando, setAsignando] = useState(null);
+  const [administrando, setAdministrando] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const rol = sesion?.rol ?? "admin";
+  const puedeEditar = rol === "admin" || rol === "profesor_c";
+  const soloAlumno = rol === "alumno_c";
+
+  const recargar = useCallback(async () => {
+    try {
+      const nuevo = await fetchGrupoCDatos();
+      setDatos(nuevo);
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    recargar();
+  }, [recargar]);
+
+  const alumnos = datos?.alumnos ?? [];
+  const materias = datos?.materias ?? [];
+  const inscripciones = datos?.inscripciones ?? [];
+  const paginasLista = datos?.paginas ?? [];
+
+  useEffect(() => {
+    if (cargando || !datos) return;
+    if (soloAlumno) {
+      const propio = datos.alumnos[0]?.id_alumno_c;
+      if (propio) setAlumnoSel(String(propio));
+      return;
+    }
+    if (!alumnoSel && datos.alumnos.length) {
+      setAlumnoSel(String(datos.alumnos[0].id_alumno_c));
+    }
+  }, [cargando, datos, soloAlumno, alumnoSel]);
+
+  const alumnoActual =
+    alumnos.find((a) => String(a.id_alumno_c) === String(alumnoSel)) ?? alumnos[0] ?? null;
+
+  const paginas = useCallback(
+    (idAlumnoC, idMateriaC) =>
+      paginasLista.find(
+        (p) => p.id_alumno_c === idAlumnoC && p.id_materia_c === idMateriaC
+      )?.paginas ?? 0,
+    [paginasLista]
+  );
+
+  const ajustar = async (idAlumnoC, idMateriaC, delta) => {
+    if (!puedeEditar) return;
+    setDatos((prev) => {
+      if (!prev) return prev;
+      const actual = prev.paginas.find(
+        (p) => p.id_alumno_c === idAlumnoC && p.id_materia_c === idMateriaC
+      );
+      const nuevo = Math.max(0, (actual?.paginas ?? 0) + delta);
+      const paginasActualizadas = actual
+        ? prev.paginas.map((p) =>
+            p.id_alumno_c === idAlumnoC && p.id_materia_c === idMateriaC
+              ? { ...p, paginas: nuevo }
+              : p
+          )
+        : [
+            ...prev.paginas,
+            { id_alumno_c: idAlumnoC, id_materia_c: idMateriaC, paginas: nuevo },
+          ];
+      return { ...prev, paginas: paginasActualizadas };
+    });
+    try {
+      await ajustarGrupoCPaginas(idAlumnoC, idMateriaC, delta);
+    } catch (err) {
+      setToast(err.message);
+      recargar();
+    }
+  };
+
+  const asignarMaterias = async (idAlumnoC, ids) => {
+    try {
+      await guardarGrupoCInscripciones(idAlumnoC, ids);
+      await recargar();
+      setAsignando(null);
+      setToast("Materias actualizadas.");
+    } catch (err) {
+      setToast(err.message);
+    }
+  };
+
+  const materiasDe = (idAlumnoC) =>
+    inscripciones
+      .filter((i) => i.id_alumno_c === idAlumnoC)
+      .map((i) => materias.find((m) => m.id_materia_c === i.id_materia_c))
+      .filter(Boolean);
+
+  if (cargando) {
+    return <LoadingScreen />;
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-md rounded-2xl border border-red-100 bg-white p-6 text-center shadow-sm dark:border-red-500/30 dark:bg-gray-900">
+        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
+          <X className="h-5 w-5 text-red-500 dark:text-red-400" />
+        </div>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">No se pudo cargar Grupo C</h3>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{error}</p>
+        <p className="mt-2 text-xs text-gray-400">
+          Verifica que el SQL de Grupo C ya se haya ejecutado en la base de datos.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setCargando(true);
+            recargar();
+          }}
+          className="mt-4 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          <RotateCcw className="h-4 w-4" />
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  const tabs = [
+    { id: "individual", nombre: "Individual", icon: UserSearch },
+    { id: "tabla", nombre: "Tabla", icon: ClipboardList },
+    { id: "matriz", nombre: "Matriz general", icon: Table2 },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+            Páginas completadas
+          </h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {soloAlumno
+              ? "Consulta el avance de tus libros de texto."
+              : "Registro manual de páginas completadas por materia."}
+          </p>
+        </div>
+        {puedeEditar && (
+          <button
+            type="button"
+            onClick={() => setAdministrando(true)}
+            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            <UserCog className="h-4 w-4" />
+            Administrar grupo
+          </button>
+        )}
+      </div>
+
+      {!soloAlumno && (
+        <div className="inline-flex flex-wrap gap-1 rounded-full border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900">
+          {tabs.map((tab) => {
+            const Icono = tab.icon;
+            const activa = seccion === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setSeccion(tab.id)}
+                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${
+                  activa
+                    ? "bg-gray-900 text-white dark:bg-blue-600"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+                }`}
+              >
+                <Icono className="h-4 w-4" />
+                {tab.nombre}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {soloAlumno ? (
+        alumnoActual ? (
+          <GrupoCIndividual
+            alumno={alumnoActual}
+            materias={materiasDe(alumnoActual.id_alumno_c)}
+            paginas={(idMateriaC) => paginas(alumnoActual.id_alumno_c, idMateriaC)}
+            puedeEditar={false}
+            onAjustar={ajustar}
+            onAsignar={() => {}}
+          />
+        ) : (
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+            Tu cuenta aún no tiene un alumno de Grupo C vinculado.
+          </div>
+        )
+      ) : seccion === "individual" ? (
+        alumnoActual ? (
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Alumno
+                <select
+                  value={alumnoActual.id_alumno_c}
+                  onChange={(e) => setAlumnoSel(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-blue-500/25 sm:min-w-64"
+                >
+                  {alumnos.map((alumno) => (
+                    <option key={alumno.id_alumno_c} value={alumno.id_alumno_c}>
+                      {alumno.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <GrupoCIndividual
+              alumno={alumnoActual}
+              materias={materiasDe(alumnoActual.id_alumno_c)}
+              paginas={(idMateriaC) => paginas(alumnoActual.id_alumno_c, idMateriaC)}
+              puedeEditar={puedeEditar}
+              onAjustar={ajustar}
+              onAsignar={() => setAsignando(alumnoActual)}
+            />
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+            Agrega alumnos desde “Administrar grupo”.
+          </div>
+        )
+      ) : seccion === "tabla" ? (
+        <GrupoCTabla
+          alumnos={alumnos}
+          materias={materias}
+          inscripciones={inscripciones}
+          paginas={paginas}
+          puedeEditar={puedeEditar}
+          onAjustar={ajustar}
+        />
+      ) : (
+        <GrupoCMatriz
+          alumnos={alumnos}
+          materias={materias}
+          inscripciones={inscripciones}
+          paginas={paginas}
+        />
+      )}
+
+      {administrando && (
+        <ModalAdministrarGrupo
+          alumnos={alumnos}
+          materias={materias}
+          onCerrar={() => setAdministrando(false)}
+          onRecargar={recargar}
+          onToast={setToast}
+        />
+      )}
+
+      {asignando && (
+        <ModalAsignarMaterias
+          alumno={asignando}
+          materias={materias}
+          asignadas={materiasDe(asignando.id_alumno_c).map((m) => m.id_materia_c)}
+          onCerrar={() => setAsignando(null)}
+          onGuardar={asignarMaterias}
+        />
+      )}
+
+      <Toast mensaje={toast} onclose={() => setToast(null)} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Vista nueva: Usuarios (solo admin)                                 */
 /* ------------------------------------------------------------------ */
 
 function VistaUsuarios({ alumnos }) {
   const [usuarios, setUsuarios] = useState([]);
+  const [alumnosC, setAlumnosC] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
-  const [form, setForm] = useState({ usuario: "", contrasena: "", rol: "direccion", id_alumno: "" });
+  const [form, setForm] = useState({
+    usuario: "",
+    contrasena: "",
+    rol: "direccion",
+    id_alumno: "",
+    id_alumno_c: "",
+  });
   const [guardando, setGuardando] = useState(false);
   const [eliminando, setEliminando] = useState(null);
   const [cambiando, setCambiando] = useState(null);
@@ -3250,6 +4172,12 @@ function VistaUsuarios({ alumnos }) {
     cargar();
   }, [cargar]);
 
+  useEffect(() => {
+    fetchGrupoCAlumnos()
+      .then((lista) => setAlumnosC(lista))
+      .catch(() => setAlumnosC([]));
+  }, []);
+
   const crear = async (e) => {
     e.preventDefault();
     if (!form.usuario.trim() || !form.contrasena) return;
@@ -3261,8 +4189,16 @@ function VistaUsuarios({ alumnos }) {
         contrasena: form.contrasena,
         rol: form.rol,
         id_alumno: form.rol === "padre" && form.id_alumno ? Number(form.id_alumno) : null,
+        id_alumno_c:
+          form.rol === "alumno_c" && form.id_alumno_c ? Number(form.id_alumno_c) : null,
       });
-      setForm({ usuario: "", contrasena: "", rol: "direccion", id_alumno: "" });
+      setForm({
+        usuario: "",
+        contrasena: "",
+        rol: "direccion",
+        id_alumno: "",
+        id_alumno_c: "",
+      });
       await cargar();
     } catch (err) {
       setError(err.message);
@@ -3303,6 +4239,9 @@ function VistaUsuarios({ alumnos }) {
   const nombreAlumno = (id) =>
     alumnos.find((a) => a.id_alumno === id)?.nombre ?? "—";
 
+  const nombreAlumnoC = (id) =>
+    alumnosC.find((a) => a.id_alumno_c === id)?.nombre ?? "—";
+
   const campoSelect =
     "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-500/25";
 
@@ -3311,7 +4250,7 @@ function VistaUsuarios({ alumnos }) {
       <div>
         <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">Usuarios</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Cuentas de acceso a la pagina. Los padres se vinculan a un solo alumno.
+          Cuentas de acceso a la pagina. Los padres se vinculan a un alumno y los alumnos de Grupo C a su registro.
         </p>
       </div>
 
@@ -3345,12 +4284,21 @@ function VistaUsuarios({ alumnos }) {
             <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">Rol</label>
             <select
               value={form.rol}
-              onChange={(e) => setForm({ ...form, rol: e.target.value })}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  rol: e.target.value,
+                  id_alumno: "",
+                  id_alumno_c: "",
+                })
+              }
               className={campoSelect}
             >
               <option value="direccion">Direccion</option>
               <option value="padre">Padre</option>
               <option value="admin">Administrador</option>
+              <option value="profesor_c">Profesor Grupo C</option>
+              <option value="alumno_c">Alumno Grupo C</option>
             </select>
           </div>
           {form.rol === "padre" && (
@@ -3370,6 +4318,25 @@ function VistaUsuarios({ alumnos }) {
               </select>
             </div>
           )}
+          {form.rol === "alumno_c" && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Alumno de Grupo C
+              </label>
+              <select
+                value={form.id_alumno_c}
+                onChange={(e) => setForm({ ...form, id_alumno_c: e.target.value })}
+                className={campoSelect}
+              >
+                <option value="">Selecciona un alumno</option>
+                {alumnosC.map((a) => (
+                  <option key={a.id_alumno_c} value={a.id_alumno_c}>
+                    {a.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         <button
           type="submit"
@@ -3377,7 +4344,8 @@ function VistaUsuarios({ alumnos }) {
             guardando ||
             !form.usuario.trim() ||
             !form.contrasena ||
-            (form.rol === "padre" && !form.id_alumno)
+            (form.rol === "padre" && !form.id_alumno) ||
+            (form.rol === "alumno_c" && !form.id_alumno_c)
           }
           className="mt-4 inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 dark:hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
         >
@@ -3430,7 +4398,11 @@ function VistaUsuarios({ alumnos }) {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                      {u.rol === "padre" ? nombreAlumno(u.id_alumno) : "—"}
+                      {u.rol === "padre"
+                        ? nombreAlumno(u.id_alumno)
+                        : u.rol === "alumno_c"
+                          ? nombreAlumnoC(u.id_alumno_c)
+                          : "—"}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex gap-2">
@@ -3632,7 +4604,9 @@ export default function App() {
   }, [vista]);
 
   useEffect(() => {
-    if (!autenticado) return;
+    if (!autenticado) return undefined;
+    const rol = obtenerSesion()?.rol;
+    if (rol === "profesor_c" || rol === "alumno_c") return undefined;
     let cancelado = false;
 
     cargarHorario().then((data) => {
@@ -3685,6 +4659,12 @@ export default function App() {
   }, [autenticado]);
 
   const cargarDatos = useCallback(async () => {
+    const rolSesion = obtenerSesion()?.rol;
+    if (rolSesion === "profesor_c" || rolSesion === "alumno_c") {
+      // Estos roles solo usan la seccion Grupo C, que carga sus propios datos.
+      setCargando(false);
+      return;
+    }
     try {
       const [a, m, i, p] = await Promise.all([
         fetchAlumnos(),
@@ -3970,6 +4950,8 @@ export default function App() {
             <VistaUsuarios alumnos={alumnos} />
           ) : vistaSegura === "horario" ? (
             <VistaHorario soloLectura={soloLectura} />
+          ) : vistaSegura === "grupo-c" ? (
+            <VistaGrupoC sesion={sesion} />
           ) : (
             <VistaMatriz
               alumnos={alumnos}
