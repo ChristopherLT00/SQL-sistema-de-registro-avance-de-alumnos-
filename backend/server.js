@@ -381,6 +381,99 @@ app.get("/api/grupo-c/datos", verGrupoC, async (req, res) => {
   }
 });
 
+function paginaComentario(valor) {
+  const n = Number(valor);
+  return Number.isInteger(n) && n > 0 && n <= 100000 ? n : null;
+}
+
+function textoComentario(valor) {
+  const texto = typeof valor === "string" ? valor.trim() : "";
+  return texto && texto.length <= 2000 ? texto : null;
+}
+
+app.get("/api/grupo-c/comentarios", verGrupoC, async (req, res) => {
+  try {
+    const soloAlumnoC = alumnoCDelToken(req);
+    if (req.usuario.rol === "alumno_c" && !soloAlumnoC) {
+      return res.status(403).json({ error: "Tu cuenta no esta vinculada a un alumno de Grupo C" });
+    }
+
+    const idSolicitado = idGrupoC(req.query.id_alumno_c);
+    const idAlumnoC = soloAlumnoC ?? idSolicitado;
+
+    if (!soloAlumnoC && req.query.id_alumno_c && !idSolicitado) {
+      return res.status(400).json({ error: "Id de alumno invalido" });
+    }
+
+    const filtro = idAlumnoC ? "WHERE c.id_alumno_c = $1" : "";
+    const params = idAlumnoC ? [idAlumnoC] : [];
+    const result = await pool.query(
+      `SELECT c.id_comentario, c.id_alumno_c, c.id_materia_c,
+              a.nombre AS alumno_nombre, m.nombre AS materia_nombre,
+              c.pagina, c.comentario, c.autor, c.creado_en
+       FROM grupo_c_comentarios c
+       JOIN grupo_c_alumnos a ON a.id_alumno_c = c.id_alumno_c
+       JOIN grupo_c_materias m ON m.id_materia_c = c.id_materia_c
+       ${filtro}
+       ORDER BY c.creado_en DESC, c.id_comentario DESC`,
+      params
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/grupo-c/comentarios", editarGrupoC, async (req, res) => {
+  try {
+    const idAlumnoC = idGrupoC(req.body.id_alumno_c);
+    const idMateriaC = idGrupoC(req.body.id_materia_c);
+    const pagina = paginaComentario(req.body.pagina);
+    const comentario = textoComentario(req.body.comentario);
+
+    if (!idAlumnoC || !idMateriaC || !pagina || !comentario) {
+      return res
+        .status(400)
+        .json({ error: "Se requiere alumno, materia, pagina y comentario" });
+    }
+
+    const asignada = await pool.query(
+      "SELECT 1 FROM grupo_c_inscripciones WHERE id_alumno_c = $1 AND id_materia_c = $2",
+      [idAlumnoC, idMateriaC]
+    );
+    if (asignada.rowCount === 0) {
+      return res.status(400).json({ error: "La materia no esta asignada al alumno" });
+    }
+
+    const autor = String(req.usuario?.usuario || "usuario").slice(0, 80);
+    const result = await pool.query(
+      `INSERT INTO grupo_c_comentarios
+         (id_alumno_c, id_materia_c, pagina, comentario, autor)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id_comentario, id_alumno_c, id_materia_c, pagina, comentario, autor, creado_en`,
+      [idAlumnoC, idMateriaC, pagina, comentario, autor]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/grupo-c/comentarios/:id", editarGrupoC, async (req, res) => {
+  try {
+    const id = idGrupoC(req.params.id);
+    if (!id) return res.status(400).json({ error: "Id invalido" });
+    const result = await pool.query(
+      "DELETE FROM grupo_c_comentarios WHERE id_comentario = $1 RETURNING id_comentario",
+      [id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Comentario no encontrado" });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/api/grupo-c/alumnos", editarGrupoC, async (req, res) => {
   try {
     const nombre = nombreGrupoC(req.body.nombre);

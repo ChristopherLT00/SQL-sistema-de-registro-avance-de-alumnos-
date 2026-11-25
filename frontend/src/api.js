@@ -455,3 +455,45 @@ export async function ajustarGrupoCPaginas(idAlumnoC, idMateriaC, delta) {
   }
   return res.json();
 }
+
+export async function fetchGrupoCComentarios(idAlumnoC) {
+  const query = idAlumnoC ? `?id_alumno_c=${encodeURIComponent(idAlumnoC)}` : "";
+  const res = await fetch(`${API}/grupo-c/comentarios${query}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al obtener los comentarios");
+  }
+  return res.json();
+}
+
+export async function crearGrupoCComentario({
+  id_alumno_c,
+  id_materia_c,
+  pagina,
+  comentario,
+}) {
+  const res = await fetch(`${API}/grupo-c/comentarios`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ id_alumno_c, id_materia_c, pagina, comentario }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al guardar el comentario");
+  }
+  return res.json();
+}
+
+export async function eliminarGrupoCComentario(id) {
+  const res = await fetch(`${API}/grupo-c/comentarios/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al eliminar el comentario");
+  }
+  return res.json();
+}

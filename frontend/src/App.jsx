@@ -35,6 +35,8 @@ import {
   Paperclip,
   Plus,
   Minus,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import {
   fetchAlumnos,
@@ -72,6 +74,9 @@ import {
   deleteGrupoCMateria,
   guardarGrupoCInscripciones,
   ajustarGrupoCPaginas,
+  fetchGrupoCComentarios,
+  crearGrupoCComentario,
+  eliminarGrupoCComentario,
 } from "./api";
 import { generarPDFAvance, generarPDFMatriz, generarPDFHorario } from "./pdf";
 import { generarExcelAvance, generarExcelMatriz } from "./excel";
@@ -3272,8 +3277,329 @@ function ContadorPaginas({ cantidad, onSumar, onRestar, puedeEditar, etiqueta })
   );
 }
 
-function GrupoCIndividual({ alumno, materias, paginas, puedeEditar, onAjustar, onAsignar }) {
+function formatearFechaComentario(valor) {
+  if (!valor) return "";
+  return new Date(valor).toLocaleString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function GrupoCComentarios({
+  alumno,
+  materias,
+  comentarios,
+  cargando,
+  error,
+  puedeEditar,
+  onCrear,
+  onEliminar,
+}) {
+  const [idMateria, setIdMateria] = useState("");
+  const [pagina, setPagina] = useState("");
+  const [texto, setTexto] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [errorForm, setErrorForm] = useState(null);
+  const [confirmando, setConfirmando] = useState(null);
+  const [borrando, setBorrando] = useState(null);
+
+  useEffect(() => {
+    const existe = materias.some((m) => String(m.id_materia_c) === String(idMateria));
+    if (!existe) setIdMateria(materias[0] ? String(materias[0].id_materia_c) : "");
+  }, [materias, idMateria]);
+
+  const marcadas = [];
+  for (const comentario of comentarios) {
+    const clave = `${comentario.id_materia_c}-${comentario.pagina}`;
+    const existente = marcadas.find((m) => m.clave === clave);
+    if (existente) {
+      existente.cantidad += 1;
+    } else {
+      marcadas.push({
+        clave,
+        id_materia_c: comentario.id_materia_c,
+        pagina: comentario.pagina,
+        materia_nombre: comentario.materia_nombre,
+        cantidad: 1,
+      });
+    }
+  }
+  marcadas.sort(
+    (a, b) => a.materia_nombre.localeCompare(b.materia_nombre) || a.pagina - b.pagina
+  );
+
+  const usarPagina = (marcada) => {
+    if (!puedeEditar) return;
+    setIdMateria(String(marcada.id_materia_c));
+    setPagina(String(marcada.pagina));
+    setErrorForm(null);
+  };
+
+  const enviar = async (e) => {
+    e.preventDefault();
+    const paginaNumero = Number(pagina);
+    if (!idMateria) {
+      setErrorForm("Selecciona una materia.");
+      return;
+    }
+    if (!Number.isInteger(paginaNumero) || paginaNumero < 1) {
+      setErrorForm("Indica una página válida.");
+      return;
+    }
+    if (!texto.trim()) {
+      setErrorForm("Escribe un comentario.");
+      return;
+    }
+    setEnviando(true);
+    setErrorForm(null);
+    try {
+      await onCrear({
+        id_alumno_c: alumno.id_alumno_c,
+        id_materia_c: Number(idMateria),
+        pagina: paginaNumero,
+        comentario: texto.trim(),
+      });
+      setTexto("");
+      setPagina("");
+    } catch (err) {
+      setErrorForm(err.message);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const borrar = async (idComentario) => {
+    setBorrando(idComentario);
+    setErrorForm(null);
+    try {
+      await onEliminar(idComentario);
+      setConfirmando(null);
+    } catch (err) {
+      setErrorForm(err.message);
+    } finally {
+      setBorrando(null);
+    }
+  };
+
+  const campo =
+    "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-blue-500/25";
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            Comentarios por página
+          </h3>
+        </div>
+        <span className="text-xs text-gray-400">
+          {comentarios.length} {comentarios.length === 1 ? "comentario" : "comentarios"}
+        </span>
+      </div>
+
+      {marcadas.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Páginas marcadas</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {marcadas.map((marcada) => {
+              const etiqueta = `${marcada.materia_nombre} · Pág. ${marcada.pagina}${
+                marcada.cantidad > 1 ? ` (${marcada.cantidad})` : ""
+              }`;
+              const clases =
+                "rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300";
+              return puedeEditar ? (
+                <button
+                  key={marcada.clave}
+                  type="button"
+                  onClick={() => usarPagina(marcada)}
+                  className={`${clases} hover:bg-amber-100 dark:hover:bg-amber-500/20`}
+                  title="Usar esta materia y página en el formulario"
+                >
+                  {etiqueta}
+                </button>
+              ) : (
+                <span key={marcada.clave} className={clases}>
+                  {etiqueta}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {puedeEditar &&
+        (materias.length === 0 ? (
+          <p className="mt-4 rounded-xl border border-dashed border-gray-200 px-4 py-5 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+            Asigna una materia a este alumno para poder comentar sus páginas.
+          </p>
+        ) : (
+          <form
+            onSubmit={enviar}
+            className="mt-4 rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-950/50"
+          >
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Materia
+                <select
+                  value={idMateria}
+                  onChange={(e) => setIdMateria(e.target.value)}
+                  className={`${campo} mt-1`}
+                >
+                  {materias.map((materia) => (
+                    <option key={materia.id_materia_c} value={materia.id_materia_c}>
+                      {nombreMateriaSeguro(materia.nombre)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Página
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={pagina}
+                  onChange={(e) => setPagina(e.target.value)}
+                  placeholder="Ej. 24"
+                  className={`${campo} mt-1`}
+                />
+              </label>
+            </div>
+            <label className="mt-3 block text-xs font-medium text-gray-500 dark:text-gray-400">
+              Comentario
+              <textarea
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="Escribe qué observaste en esa página..."
+                className={`${campo} mt-1 resize-y`}
+              />
+            </label>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] text-gray-400">
+                Se guarda con tu usuario y la fecha.
+              </span>
+              <button
+                type="submit"
+                disabled={enviando || !idMateria || !pagina || !texto.trim()}
+                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:bg-blue-600 dark:hover:bg-blue-500 dark:disabled:bg-gray-700 dark:disabled:text-gray-500"
+              >
+                {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Agregar comentario
+              </button>
+            </div>
+            {errorForm && (
+              <p className="mt-2 text-xs text-red-600 dark:text-red-400">{errorForm}</p>
+            )}
+          </form>
+        ))}
+
+      <div className="mt-4 space-y-2">
+        {cargando ? (
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-400 dark:border-gray-700">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando comentarios...
+          </div>
+        ) : error ? (
+          <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+            {error}
+            <span className="mt-1 block text-xs opacity-80">
+              Verifica que el SQL de comentarios ya se haya ejecutado.
+            </span>
+          </div>
+        ) : comentarios.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+            Todavía no hay comentarios para este alumno.
+          </div>
+        ) : (
+          comentarios.map((comentario) => (
+            <div
+              key={comentario.id_comentario}
+              className="rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-950/50"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                  {nombreMateriaSeguro(comentario.materia_nombre)}
+                </span>
+                <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                  Página {comentario.pagina}
+                </span>
+                <span className="ml-auto text-[11px] text-gray-400">
+                  {formatearFechaComentario(comentario.creado_en)}
+                </span>
+              </div>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
+                {comentario.comentario}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400">
+                <span>{comentario.autor}</span>
+                {puedeEditar &&
+                  (confirmando === comentario.id_comentario ? (
+                    <span className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => borrar(comentario.id_comentario)}
+                        disabled={borrando === comentario.id_comentario}
+                        className="rounded-full bg-red-600 px-2.5 py-1 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {borrando === comentario.id_comentario ? "Eliminando..." : "Eliminar"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmando(null)}
+                        className="rounded-full border border-gray-200 bg-white px-2.5 py-1 font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+                      >
+                        Cancelar
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmando(comentario.id_comentario)}
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Eliminar
+                    </button>
+                  ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GrupoCIndividual({
+  alumno,
+  materias,
+  paginas,
+  comentarios = [],
+  cargandoComentarios = false,
+  errorComentarios = null,
+  puedeEditar,
+  onAjustar,
+  onAsignar,
+  onCrearComentario,
+  onEliminarComentario,
+}) {
   const total = materias.reduce((suma, m) => suma + paginas(m.id_materia_c), 0);
+  const comentariosVisibles = comentarios.filter((comentario) =>
+    materias.some((materia) => materia.id_materia_c === comentario.id_materia_c)
+  );
+  const paginasMarcadas = (idMateriaC) => [
+    ...new Set(
+      comentariosVisibles
+        .filter((comentario) => comentario.id_materia_c === idMateriaC)
+        .map((comentario) => comentario.pagina)
+    ),
+  ].sort((a, b) => a - b);
 
   return (
     <div className="space-y-4">
@@ -3306,11 +3632,26 @@ function GrupoCIndividual({ alumno, materias, paginas, puedeEditar, onAjustar, o
           <ul className="mt-4 divide-y divide-gray-100 dark:divide-gray-800">
             {materias.map((materia) => {
               const cantidad = paginas(materia.id_materia_c);
+              const marcadas = paginasMarcadas(materia.id_materia_c);
               return (
                 <li key={materia.id_materia_c} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                  <span className="min-w-0 flex-1 text-sm font-medium text-gray-800 dark:text-gray-200">
-                    {nombreMateriaSeguro(materia.nombre)}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                      {nombreMateriaSeguro(materia.nombre)}
+                    </div>
+                    {marcadas.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {marcadas.map((numero) => (
+                          <span
+                            key={numero}
+                            className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                          >
+                            Pág. {numero}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-400">páginas</span>
                     <ContadorPaginas
@@ -3327,6 +3668,17 @@ function GrupoCIndividual({ alumno, materias, paginas, puedeEditar, onAjustar, o
           </ul>
         )}
       </div>
+
+      <GrupoCComentarios
+        alumno={alumno}
+        materias={materias}
+        comentarios={comentariosVisibles}
+        cargando={cargandoComentarios}
+        error={errorComentarios}
+        puedeEditar={puedeEditar}
+        onCrear={onCrearComentario}
+        onEliminar={onEliminarComentario}
+      />
     </div>
   );
 }
@@ -3864,6 +4216,10 @@ function VistaGrupoC({ sesion }) {
   const [asignando, setAsignando] = useState(null);
   const [administrando, setAdministrando] = useState(false);
   const [toast, setToast] = useState(null);
+  const [comentarios, setComentarios] = useState([]);
+  const [cargandoComentarios, setCargandoComentarios] = useState(false);
+  const [errorComentarios, setErrorComentarios] = useState(null);
+  const comentariosSeq = useRef(0);
 
   const rol = sesion?.rol ?? "admin";
   const puedeEditar = rol === "admin" || rol === "profesor_c";
@@ -3904,6 +4260,63 @@ function VistaGrupoC({ sesion }) {
 
   const alumnoActual =
     alumnos.find((a) => String(a.id_alumno_c) === String(alumnoSel)) ?? alumnos[0] ?? null;
+  const alumnoActualId = alumnoActual?.id_alumno_c ?? null;
+
+  const cargarComentarios = useCallback(async (idAlumnoC) => {
+    const secuencia = ++comentariosSeq.current;
+    if (!idAlumnoC) {
+      setComentarios([]);
+      setErrorComentarios(null);
+      setCargandoComentarios(false);
+      return;
+    }
+    setCargandoComentarios(true);
+    try {
+      const lista = await fetchGrupoCComentarios(idAlumnoC);
+      if (secuencia === comentariosSeq.current) {
+        setComentarios(lista);
+        setErrorComentarios(null);
+      }
+    } catch (err) {
+      if (secuencia === comentariosSeq.current) {
+        setComentarios([]);
+        setErrorComentarios(err.message);
+      }
+    } finally {
+      if (secuencia === comentariosSeq.current) setCargandoComentarios(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarComentarios(alumnoActualId);
+  }, [alumnoActualId, cargarComentarios]);
+
+  const sincronizar = useCallback(async () => {
+    await recargar();
+    await cargarComentarios(alumnoActualId);
+  }, [recargar, cargarComentarios, alumnoActualId]);
+
+  const crearComentario = async (payload) => {
+    try {
+      await crearGrupoCComentario(payload);
+      await cargarComentarios(payload.id_alumno_c);
+      setToast("Comentario agregado.");
+    } catch (err) {
+      setToast(err.message);
+      throw err;
+    }
+  };
+
+  const eliminarComentario = async (idComentario) => {
+    try {
+      await eliminarGrupoCComentario(idComentario);
+      await cargarComentarios(alumnoActualId);
+      setToast("Comentario eliminado.");
+    } catch (err) {
+      setToast(err.message);
+      throw err;
+    }
+  };
 
   const paginas = useCallback(
     (idAlumnoC, idMateriaC) =>
@@ -3944,7 +4357,7 @@ function VistaGrupoC({ sesion }) {
   const asignarMaterias = async (idAlumnoC, ids) => {
     try {
       await guardarGrupoCInscripciones(idAlumnoC, ids);
-      await recargar();
+      await sincronizar();
       setAsignando(null);
       setToast("Materias actualizadas.");
     } catch (err) {
@@ -4049,9 +4462,14 @@ function VistaGrupoC({ sesion }) {
             alumno={alumnoActual}
             materias={materiasDe(alumnoActual.id_alumno_c)}
             paginas={(idMateriaC) => paginas(alumnoActual.id_alumno_c, idMateriaC)}
+            comentarios={comentarios}
+            cargandoComentarios={cargandoComentarios}
+            errorComentarios={errorComentarios}
             puedeEditar={false}
             onAjustar={ajustar}
             onAsignar={() => {}}
+            onCrearComentario={crearComentario}
+            onEliminarComentario={eliminarComentario}
           />
         ) : (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
@@ -4081,9 +4499,14 @@ function VistaGrupoC({ sesion }) {
               alumno={alumnoActual}
               materias={materiasDe(alumnoActual.id_alumno_c)}
               paginas={(idMateriaC) => paginas(alumnoActual.id_alumno_c, idMateriaC)}
+              comentarios={comentarios}
+              cargandoComentarios={cargandoComentarios}
+              errorComentarios={errorComentarios}
               puedeEditar={puedeEditar}
               onAjustar={ajustar}
               onAsignar={() => setAsignando(alumnoActual)}
+              onCrearComentario={crearComentario}
+              onEliminarComentario={eliminarComentario}
             />
           </div>
         ) : (
@@ -4114,7 +4537,7 @@ function VistaGrupoC({ sesion }) {
           alumnos={alumnos}
           materias={materias}
           onCerrar={() => setAdministrando(false)}
-          onRecargar={recargar}
+          onRecargar={sincronizar}
           onToast={setToast}
         />
       )}
