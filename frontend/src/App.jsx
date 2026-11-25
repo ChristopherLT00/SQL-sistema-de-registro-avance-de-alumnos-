@@ -37,6 +37,8 @@ import {
   Minus,
   MessageSquare,
   Send,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import {
   fetchAlumnos,
@@ -3288,17 +3290,18 @@ function formatearFechaComentario(valor) {
   });
 }
 
-function GrupoCComentarios({
+function GrupoCComentariosMateria({
   alumno,
-  materias,
+  materia,
   comentarios,
   cargando,
   error,
   puedeEditar,
+  marcaPagina,
   onCrear,
   onEliminar,
 }) {
-  const [idMateria, setIdMateria] = useState("");
+  const [mostrandoForm, setMostrandoForm] = useState(false);
   const [pagina, setPagina] = useState("");
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -3307,44 +3310,22 @@ function GrupoCComentarios({
   const [borrando, setBorrando] = useState(null);
 
   useEffect(() => {
-    const existe = materias.some((m) => String(m.id_materia_c) === String(idMateria));
-    if (!existe) setIdMateria(materias[0] ? String(materias[0].id_materia_c) : "");
-  }, [materias, idMateria]);
-
-  const marcadas = [];
-  for (const comentario of comentarios) {
-    const clave = `${comentario.id_materia_c}-${comentario.pagina}`;
-    const existente = marcadas.find((m) => m.clave === clave);
-    if (existente) {
-      existente.cantidad += 1;
-    } else {
-      marcadas.push({
-        clave,
-        id_materia_c: comentario.id_materia_c,
-        pagina: comentario.pagina,
-        materia_nombre: comentario.materia_nombre,
-        cantidad: 1,
-      });
-    }
-  }
-  marcadas.sort(
-    (a, b) => a.materia_nombre.localeCompare(b.materia_nombre) || a.pagina - b.pagina
-  );
-
-  const usarPagina = (marcada) => {
-    if (!puedeEditar) return;
-    setIdMateria(String(marcada.id_materia_c));
-    setPagina(String(marcada.pagina));
+    if (!marcaPagina) return;
+    setPagina(String(marcaPagina.pagina));
     setErrorForm(null);
-  };
+    if (puedeEditar) setMostrandoForm(true);
+  }, [marcaPagina, puedeEditar]);
+
+  const porPagina = new Map();
+  for (const comentario of comentarios) {
+    if (!porPagina.has(comentario.pagina)) porPagina.set(comentario.pagina, []);
+    porPagina.get(comentario.pagina).push(comentario);
+  }
+  const paginasOrdenadas = [...porPagina.keys()].sort((a, b) => a - b);
 
   const enviar = async (e) => {
     e.preventDefault();
     const paginaNumero = Number(pagina);
-    if (!idMateria) {
-      setErrorForm("Selecciona una materia.");
-      return;
-    }
     if (!Number.isInteger(paginaNumero) || paginaNumero < 1) {
       setErrorForm("Indica una página válida.");
       return;
@@ -3358,12 +3339,13 @@ function GrupoCComentarios({
     try {
       await onCrear({
         id_alumno_c: alumno.id_alumno_c,
-        id_materia_c: Number(idMateria),
+        id_materia_c: materia.id_materia_c,
         pagina: paginaNumero,
         comentario: texto.trim(),
       });
       setTexto("");
       setPagina("");
+      setMostrandoForm(false);
     } catch (err) {
       setErrorForm(err.message);
     } finally {
@@ -3388,188 +3370,183 @@ function GrupoCComentarios({
     "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-blue-500/25";
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-5">
+    <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            Comentarios por página
-          </h3>
-        </div>
-        <span className="text-xs text-gray-400">
-          {comentarios.length} {comentarios.length === 1 ? "comentario" : "comentarios"}
+        <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
+          <MessageSquare className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
+          Comentarios de {nombreMateriaSeguro(materia.nombre)}
         </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-gray-400">
+            {comentarios.length} {comentarios.length === 1 ? "comentario" : "comentarios"}
+          </span>
+          {puedeEditar && (
+            <button
+              type="button"
+              onClick={() => {
+                setMostrandoForm((valor) => !valor);
+                setErrorForm(null);
+              }}
+              className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              {mostrandoForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+              {mostrandoForm ? "Cerrar" : "Agregar comentario"}
+            </button>
+          )}
+        </div>
       </div>
 
-      {marcadas.length > 0 && (
-        <div className="mt-3">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Páginas marcadas</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {marcadas.map((marcada) => {
-              const etiqueta = `${marcada.materia_nombre} · Pág. ${marcada.pagina}${
-                marcada.cantidad > 1 ? ` (${marcada.cantidad})` : ""
-              }`;
-              const clases =
-                "rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300";
-              return puedeEditar ? (
-                <button
-                  key={marcada.clave}
-                  type="button"
-                  onClick={() => usarPagina(marcada)}
-                  className={`${clases} hover:bg-amber-100 dark:hover:bg-amber-500/20`}
-                  title="Usar esta materia y página en el formulario"
-                >
-                  {etiqueta}
-                </button>
-              ) : (
-                <span key={marcada.clave} className={clases}>
-                  {etiqueta}
-                </span>
-              );
-            })}
+      {mostrandoForm && puedeEditar && (
+        <form
+          onSubmit={enviar}
+          className="mt-3 rounded-xl border border-blue-100 bg-blue-50/40 p-3 dark:border-blue-500/30 dark:bg-blue-500/5"
+        >
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+            <span className="rounded-full bg-blue-100 px-2.5 py-0.5 font-medium text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
+              {nombreMateriaSeguro(materia.nombre)}
+            </span>
+            la materia queda fija; solo cambia la página
           </div>
-        </div>
-      )}
-
-      {puedeEditar &&
-        (materias.length === 0 ? (
-          <p className="mt-4 rounded-xl border border-dashed border-gray-200 px-4 py-5 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-            Asigna una materia a este alumno para poder comentar sus páginas.
-          </p>
-        ) : (
-          <form
-            onSubmit={enviar}
-            className="mt-4 rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-950/50"
-          >
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                Materia
-                <select
-                  value={idMateria}
-                  onChange={(e) => setIdMateria(e.target.value)}
-                  className={`${campo} mt-1`}
-                >
-                  {materias.map((materia) => (
-                    <option key={materia.id_materia_c} value={materia.id_materia_c}>
-                      {nombreMateriaSeguro(materia.nombre)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                Página
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={pagina}
-                  onChange={(e) => setPagina(e.target.value)}
-                  placeholder="Ej. 24"
-                  className={`${campo} mt-1`}
-                />
-              </label>
-            </div>
-            <label className="mt-3 block text-xs font-medium text-gray-500 dark:text-gray-400">
+          <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)]">
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+              Página
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={pagina}
+                onChange={(e) => setPagina(e.target.value)}
+                placeholder="Ej. 24"
+                className={`${campo} mt-1`}
+              />
+            </label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
               Comentario
               <textarea
                 value={texto}
                 onChange={(e) => setTexto(e.target.value)}
-                rows={3}
+                rows={2}
                 maxLength={2000}
-                placeholder="Escribe qué observaste en esa página..."
+                placeholder="Qué observaste en esa página..."
                 className={`${campo} mt-1 resize-y`}
               />
             </label>
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[11px] text-gray-400">
-                Se guarda con tu usuario y la fecha.
-              </span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] text-gray-400">Se guarda con tu usuario y la fecha.</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setMostrandoForm(false)}
+                className="rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Cancelar
+              </button>
               <button
                 type="submit"
-                disabled={enviando || !idMateria || !pagina || !texto.trim()}
-                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:bg-blue-600 dark:hover:bg-blue-500 dark:disabled:bg-gray-700 dark:disabled:text-gray-500"
+                disabled={enviando || !pagina || !texto.trim()}
+                className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:bg-blue-600 dark:hover:bg-blue-500 dark:disabled:bg-gray-700 dark:disabled:text-gray-500"
               >
-                {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Agregar comentario
+                {enviando ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                Guardar
               </button>
             </div>
-            {errorForm && (
-              <p className="mt-2 text-xs text-red-600 dark:text-red-400">{errorForm}</p>
-            )}
-          </form>
-        ))}
+          </div>
+          {errorForm && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{errorForm}</p>}
+        </form>
+      )}
 
-      <div className="mt-4 space-y-2">
+      <div className="mt-3 space-y-2">
         {cargando ? (
-          <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-400 dark:border-gray-700">
-            <Loader2 className="h-4 w-4 animate-spin" />
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 px-4 py-5 text-xs text-gray-400 dark:border-gray-700">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Cargando comentarios...
           </div>
         ) : error ? (
-          <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+          <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-xs text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
             {error}
-            <span className="mt-1 block text-xs opacity-80">
+            <span className="mt-1 block opacity-80">
               Verifica que el SQL de comentarios ya se haya ejecutado.
             </span>
           </div>
         ) : comentarios.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-            Todavía no hay comentarios para este alumno.
+          <div className="rounded-xl border border-dashed border-gray-200 px-4 py-5 text-center text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
+            Sin comentarios en esta materia.
           </div>
         ) : (
-          comentarios.map((comentario) => (
-            <div
-              key={comentario.id_comentario}
-              className="rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-950/50"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-                  {nombreMateriaSeguro(comentario.materia_nombre)}
-                </span>
-                <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-                  Página {comentario.pagina}
-                </span>
-                <span className="ml-auto text-[11px] text-gray-400">
-                  {formatearFechaComentario(comentario.creado_en)}
-                </span>
-              </div>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
-                {comentario.comentario}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400">
-                <span>{comentario.autor}</span>
-                {puedeEditar &&
-                  (confirmando === comentario.id_comentario ? (
-                    <span className="inline-flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => borrar(comentario.id_comentario)}
-                        disabled={borrando === comentario.id_comentario}
-                        className="rounded-full bg-red-600 px-2.5 py-1 font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                      >
-                        {borrando === comentario.id_comentario ? "Eliminando..." : "Eliminar"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmando(null)}
-                        className="rounded-full border border-gray-200 bg-white px-2.5 py-1 font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
-                      >
-                        Cancelar
-                      </button>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmando(comentario.id_comentario)}
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+          paginasOrdenadas.map((numeroPagina) => {
+            const lista = porPagina.get(numeroPagina);
+            const resaltada = marcaPagina?.pagina === numeroPagina;
+            return (
+              <div
+                key={numeroPagina}
+                className={`rounded-xl border p-3 ${
+                  resaltada
+                    ? "border-amber-300 bg-amber-50/70 ring-2 ring-amber-200 dark:border-amber-500/40 dark:bg-amber-500/10 dark:ring-amber-500/20"
+                    : "border-gray-100 bg-gray-50/70 dark:border-gray-800 dark:bg-gray-950/50"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                    Pág. {numeroPagina}
+                  </span>
+                  <span className="text-[11px] text-gray-400">
+                    {lista.length} {lista.length === 1 ? "comentario" : "comentarios"}
+                  </span>
+                </div>
+                <ul className="mt-2 space-y-2">
+                  {lista.map((comentario) => (
+                    <li
+                      key={comentario.id_comentario}
+                      className="rounded-lg border border-gray-100 bg-white p-2.5 dark:border-gray-800 dark:bg-gray-900"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Eliminar
-                    </button>
+                      <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
+                        {comentario.comentario}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400">
+                        <span>
+                          {comentario.autor} · {formatearFechaComentario(comentario.creado_en)}
+                        </span>
+                        {puedeEditar &&
+                          (confirmando === comentario.id_comentario ? (
+                            <span className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => borrar(comentario.id_comentario)}
+                                disabled={borrando === comentario.id_comentario}
+                                className="rounded-full bg-red-600 px-2.5 py-1 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                              >
+                                {borrando === comentario.id_comentario ? "Eliminando..." : "Eliminar"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmando(null)}
+                                className="rounded-full border border-gray-200 bg-white px-2.5 py-1 font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+                              >
+                                Cancelar
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmando(comentario.id_comentario)}
+                              className="inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Eliminar
+                            </button>
+                          ))}
+                      </div>
+                    </li>
                   ))}
+                </ul>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
@@ -3589,6 +3566,8 @@ function GrupoCIndividual({
   onCrearComentario,
   onEliminarComentario,
 }) {
+  const [materiaAbierta, setMateriaAbierta] = useState(null);
+  const [marcaPagina, setMarcaPagina] = useState(null);
   const total = materias.reduce((suma, m) => suma + paginas(m.id_materia_c), 0);
   const comentariosVisibles = comentarios.filter((comentario) =>
     materias.some((materia) => materia.id_materia_c === comentario.id_materia_c)
@@ -3600,54 +3579,95 @@ function GrupoCIndividual({
         .map((comentario) => comentario.pagina)
     ),
   ].sort((a, b) => a - b);
+  const comentariosDeMateria = (idMateriaC) =>
+    comentariosVisibles.filter((comentario) => comentario.id_materia_c === idMateriaC);
+
+  const alternarMateria = (idMateriaC) => {
+    setMateriaAbierta((actual) => (actual === idMateriaC ? null : idMateriaC));
+    setMarcaPagina(null);
+  };
+  const abrirConPagina = (idMateriaC, numeroPagina) => {
+    setMateriaAbierta(idMateriaC);
+    setMarcaPagina({ pagina: numeroPagina, en: Date.now() });
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">{alumno.nombre}</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {materias.length} {materias.length === 1 ? "materia" : "materias"} · {total} páginas completadas
-            </p>
-          </div>
-          {puedeEditar && (
-            <button
-              type="button"
-              onClick={onAsignar}
-              className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
-            >
-              <BookOpen className="h-4 w-4" />
-              Asignar materias
-            </button>
-          )}
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">{alumno.nombre}</h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {materias.length} {materias.length === 1 ? "materia" : "materias"} · {total} páginas completadas
+          </p>
         </div>
+        {puedeEditar && (
+          <button
+            type="button"
+            onClick={onAsignar}
+            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            <BookOpen className="h-4 w-4" />
+            Asignar materias
+          </button>
+        )}
+      </div>
 
-        {materias.length === 0 ? (
-          <div className="mt-5 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-            Este alumno no tiene materias asignadas.
-            {puedeEditar && " Usa “Asignar materias” para comenzar."}
-          </div>
-        ) : (
-          <ul className="mt-4 divide-y divide-gray-100 dark:divide-gray-800">
-            {materias.map((materia) => {
-              const cantidad = paginas(materia.id_materia_c);
-              const marcadas = paginasMarcadas(materia.id_materia_c);
-              return (
-                <li key={materia.id_materia_c} className="flex flex-wrap items-center justify-between gap-3 py-3">
+      {materias.length === 0 ? (
+        <div className="mt-5 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+          Este alumno no tiene materias asignadas.
+          {puedeEditar && " Usa “Asignar materias” para comenzar."}
+        </div>
+      ) : (
+        <ul className="mt-4 divide-y divide-gray-100 dark:divide-gray-800">
+          {materias.map((materia) => {
+            const cantidad = paginas(materia.id_materia_c);
+            const marcadas = paginasMarcadas(materia.id_materia_c);
+            const comentariosMateria = comentariosDeMateria(materia.id_materia_c);
+            const abierta = materiaAbierta === materia.id_materia_c;
+            return (
+              <li
+                key={materia.id_materia_c}
+                className={abierta ? "bg-blue-50/40 dark:bg-blue-500/5" : ""}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3 py-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                      {nombreMateriaSeguro(materia.nombre)}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => alternarMateria(materia.id_materia_c)}
+                      aria-expanded={abierta}
+                      className="group flex items-center gap-2 text-left"
+                    >
+                      {abierta ? (
+                        <ChevronDown className="h-4 w-4 shrink-0 text-blue-500 dark:text-blue-400" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 group-hover:text-blue-500 dark:text-gray-600 dark:group-hover:text-blue-400" />
+                      )}
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                        {nombreMateriaSeguro(materia.nombre)}
+                      </span>
+                      {comentariosMateria.length > 0 && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                          {comentariosMateria.length}{" "}
+                          {comentariosMateria.length === 1 ? "comentario" : "comentarios"}
+                        </span>
+                      )}
+                    </button>
                     {marcadas.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
+                      <div className="mt-1 flex flex-wrap gap-1 pl-6">
                         {marcadas.map((numero) => (
-                          <span
+                          <button
                             key={numero}
-                            className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                            type="button"
+                            onClick={() => abrirConPagina(materia.id_materia_c, numero)}
+                            title={
+                              puedeEditar
+                                ? `Ver y comentar la página ${numero}`
+                                : `Ver comentarios de la página ${numero}`
+                            }
+                            className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20"
                           >
                             Pág. {numero}
-                          </span>
+                          </button>
                         ))}
                       </div>
                     )}
@@ -3662,23 +3682,27 @@ function GrupoCIndividual({
                       onSumar={() => onAjustar(alumno.id_alumno_c, materia.id_materia_c, 1)}
                     />
                   </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
-      <GrupoCComentarios
-        alumno={alumno}
-        materias={materias}
-        comentarios={comentariosVisibles}
-        cargando={cargandoComentarios}
-        error={errorComentarios}
-        puedeEditar={puedeEditar}
-        onCrear={onCrearComentario}
-        onEliminar={onEliminarComentario}
-      />
+                </div>
+                {abierta && (
+                  <div className="pb-4 pl-6 sm:pl-8">
+                    <GrupoCComentariosMateria
+                      alumno={alumno}
+                      materia={materia}
+                      comentarios={comentariosMateria}
+                      cargando={cargandoComentarios}
+                      error={errorComentarios}
+                      puedeEditar={puedeEditar}
+                      marcaPagina={marcaPagina}
+                      onCrear={onCrearComentario}
+                      onEliminar={onEliminarComentario}
+                    />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -3711,48 +3735,73 @@ function GrupoCTabla({ alumnos, materias, inscripciones, paginas, puedeEditar, o
             <th className="px-4 py-3 text-right font-medium">Conteo</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-          {datos.map(({ alumno, asignadas, total }) => (
-            <Fragment key={alumno.id_alumno_c}>
-              <tr className="bg-gray-50/70 dark:bg-gray-950">
-                <td className="px-4 py-2.5 font-semibold text-gray-900 dark:text-gray-100">{alumno.nombre}</td>
-                <td className="px-4 py-2.5 text-center text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-200">
-                  {total}
-                </td>
-                <td className="px-4 py-2.5 text-right text-xs text-gray-400">total del alumno</td>
-              </tr>
-              {asignadas.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="px-4 py-3 text-xs text-gray-400">
-                    Sin materias asignadas.
+        <tbody>
+          {datos.map(({ alumno, asignadas, total }, indice) => {
+            const fondoCabecera = "bg-blue-50 dark:bg-blue-500/10";
+            const fondoCuerpo =
+              indice % 2 === 0
+                ? "bg-white dark:bg-gray-900"
+                : "bg-gray-50/70 dark:bg-gray-950/70";
+            return (
+              <Fragment key={alumno.id_alumno_c}>
+                <tr className={fondoCabecera}>
+                  <td className="border-t-2 border-l-4 border-t-gray-300 border-l-blue-500 px-4 py-3 dark:border-t-gray-700 dark:border-l-blue-400">
+                    <div className="flex items-center gap-2">
+                      <UserSearch className="h-4 w-4 shrink-0 text-blue-500 dark:text-blue-400" />
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">
+                        {alumno.nombre}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 pl-6 text-[11px] font-normal text-gray-500 dark:text-gray-400">
+                      {asignadas.length} {asignadas.length === 1 ? "materia" : "materias"}
+                    </div>
+                  </td>
+                  <td className="border-t-2 border-t-gray-300 px-4 py-3 text-center text-sm font-semibold tabular-nums text-gray-800 dark:border-t-gray-700 dark:text-gray-100">
+                    {total}
+                  </td>
+                  <td className="border-t-2 border-t-gray-300 px-4 py-3 text-right text-[11px] uppercase tracking-wide text-gray-400 dark:border-t-gray-700">
+                    total
                   </td>
                 </tr>
-              ) : (
-                asignadas.map((materia) => {
-                  const cantidad = paginas(alumno.id_alumno_c, materia.id_materia_c);
-                  return (
-                    <tr key={materia.id_materia_c} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                      <td className="px-4 py-2.5 pl-8 text-gray-700 dark:text-gray-300">
-                        {nombreMateriaSeguro(materia.nombre)}
-                      </td>
-                      <td className="px-4 py-2.5 text-center text-base font-semibold tabular-nums text-gray-900 dark:text-gray-100">
-                        {cantidad}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <ContadorPaginas
-                          cantidad={cantidad}
-                          etiqueta={`${materia.nombre} de ${alumno.nombre}`}
-                          puedeEditar={puedeEditar}
-                          onRestar={() => onAjustar(alumno.id_alumno_c, materia.id_materia_c, -1)}
-                          onSumar={() => onAjustar(alumno.id_alumno_c, materia.id_materia_c, 1)}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </Fragment>
-          ))}
+                {asignadas.length === 0 ? (
+                  <tr className={fondoCuerpo}>
+                    <td
+                      colSpan={3}
+                      className="border-b border-gray-100 px-4 py-3 text-xs text-gray-400 dark:border-gray-800"
+                    >
+                      Sin materias asignadas.
+                    </td>
+                  </tr>
+                ) : (
+                  asignadas.map((materia) => {
+                    const cantidad = paginas(alumno.id_alumno_c, materia.id_materia_c);
+                    return (
+                      <tr
+                        key={materia.id_materia_c}
+                        className={`${fondoCuerpo} hover:bg-blue-50/50 dark:hover:bg-blue-500/5`}
+                      >
+                        <td className="border-b border-gray-100 px-4 py-2.5 pl-8 text-gray-700 dark:border-gray-800 dark:text-gray-300">
+                          {nombreMateriaSeguro(materia.nombre)}
+                        </td>
+                        <td className="border-b border-gray-100 px-4 py-2.5 text-center text-base font-semibold tabular-nums text-gray-900 dark:border-gray-800 dark:text-gray-100">
+                          {cantidad}
+                        </td>
+                        <td className="border-b border-gray-100 px-4 py-2.5 text-right dark:border-gray-800">
+                          <ContadorPaginas
+                            cantidad={cantidad}
+                            etiqueta={`${materia.nombre} de ${alumno.nombre}`}
+                            puedeEditar={puedeEditar}
+                            onRestar={() => onAjustar(alumno.id_alumno_c, materia.id_materia_c, -1)}
+                            onSumar={() => onAjustar(alumno.id_alumno_c, materia.id_materia_c, 1)}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -3783,8 +3832,10 @@ function GrupoCMatriz({ alumnos, materias, inscripciones, paginas }) {
     <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead>
-          <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:border-gray-800 dark:bg-gray-950">
-            <th className="sticky left-0 z-10 bg-gray-50 px-4 py-3 font-medium dark:bg-gray-950">Alumno</th>
+          <tr className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:border-gray-700 dark:bg-gray-950">
+            <th className="sticky left-0 z-10 border-r border-gray-200 bg-gray-50 px-4 py-3 font-medium dark:border-gray-700 dark:bg-gray-950">
+              Alumno
+            </th>
             {usadas.map((materia) => (
               <th key={materia.id_materia_c} className="whitespace-nowrap px-3 py-3 text-center font-medium">
                 {nombreMateriaSeguro(materia.nombre)}
@@ -3793,16 +3844,28 @@ function GrupoCMatriz({ alumnos, materias, inscripciones, paginas }) {
             <th className="px-4 py-3 text-center font-medium">Total</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-          {alumnos.map((alumno) => {
+        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+          {alumnos.map((alumno, indice) => {
             const total = usadas.reduce(
               (suma, materia) => suma + paginas(alumno.id_alumno_c, materia.id_materia_c),
               0
             );
+            const fondo =
+              indice % 2 === 0
+                ? "bg-white dark:bg-gray-900"
+                : "bg-gray-50/70 dark:bg-gray-950/70";
             return (
-              <tr key={alumno.id_alumno_c} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-4 py-3 font-medium text-gray-900 dark:bg-gray-900 dark:text-gray-100">
-                  {alumno.nombre}
+              <tr
+                key={alumno.id_alumno_c}
+                className={`${fondo} hover:bg-blue-50/60 dark:hover:bg-blue-500/5`}
+              >
+                <td
+                  className={`sticky left-0 z-10 whitespace-nowrap border-r border-gray-200 px-4 py-3 font-medium text-gray-900 dark:border-gray-700 dark:text-gray-100 ${fondo}`}
+                >
+                  <span className="flex items-center gap-2">
+                    <UserSearch className="h-4 w-4 shrink-0 text-blue-500 dark:text-blue-400" />
+                    {alumno.nombre}
+                  </span>
                 </td>
                 {usadas.map((materia) => {
                   const asignada = inscripciones.some(
@@ -3825,8 +3888,10 @@ function GrupoCMatriz({ alumnos, materias, inscripciones, paginas }) {
           })}
         </tbody>
         <tfoot>
-          <tr className="border-t border-gray-100 bg-gray-50 font-semibold text-gray-900 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100">
-            <td className="sticky left-0 z-10 bg-gray-50 px-4 py-3 dark:bg-gray-950">Total</td>
+          <tr className="border-t-2 border-t-gray-300 bg-gray-50 font-semibold text-gray-900 dark:border-t-gray-700 dark:bg-gray-950 dark:text-gray-100">
+            <td className="sticky left-0 z-10 border-r border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-950">
+              Total
+            </td>
             {usadas.map((materia) => (
               <td key={materia.id_materia_c} className="px-3 py-3 text-center tabular-nums">
                 {totalPorMateria.get(materia.id_materia_c) ?? 0}
