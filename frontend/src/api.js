@@ -166,6 +166,22 @@ export async function saveHorario(grid) {
   return res.json();
 }
 
+export async function fetchHorarioGrupoC() {
+  const res = await fetch(`${API}/grupo-c/horario`, { headers: authHeaders() });
+  if (!res.ok) fallo(res, "Error al obtener el horario de Grupo C");
+  return res.json();
+}
+
+export async function saveHorarioGrupoC(grid) {
+  const res = await fetch(`${API}/grupo-c/horario`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ grid }),
+  });
+  if (!res.ok) fallo(res, "Error al guardar el horario de Grupo C");
+  return res.json();
+}
+
 /* ------------------------------------------------------------------ */
 /*  Progreso                                                           */
 /* ------------------------------------------------------------------ */

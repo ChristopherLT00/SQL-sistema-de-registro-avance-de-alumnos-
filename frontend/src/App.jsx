@@ -85,10 +85,15 @@ import { generarExcelAvance, generarExcelMatriz } from "./excel";
 import {
   DIAS,
   BLOQUES,
+  BLOQUES_SECUNDARIA,
   HORARIO_DEFAULT,
+  HORARIO_SECUNDARIA_DEFAULT,
   cargarHorario,
   guardarHorario,
   restaurarHorario,
+  cargarHorarioGrupoC,
+  guardarHorarioGrupoC,
+  restaurarHorarioGrupoC,
   obtenerEstadoActual,
   obtenerMateriaActual,
 } from "./horario";
@@ -2861,6 +2866,40 @@ function colorParaMateria(nombre) {
   return PALETA_FALLA[Math.abs(hash) % PALETA_FALLA.length];
 }
 
+const COLORES_SECUNDARIA = {
+  "ingles": { punto: "#2563eb", texto: "#1d4ed8" },
+  "español": { punto: "#22c55e", texto: "#15803d" },
+  "literatura": { punto: "#16a34a", texto: "#166534" },
+  "ortografia / caligrafia": { punto: "#4ade80", texto: "#15803d" },
+  "biología": { punto: "#14b8a6", texto: "#0f766e" },
+  "química": { punto: "#0d9488", texto: "#115e59" },
+  "historia": { punto: "#ef4444", texto: "#b91c1c" },
+  "matemáticas": { punto: "#f59e0b", texto: "#b45309" },
+  "geografia": { punto: "#06b6d4", texto: "#0e7490" },
+  "deportes": { punto: "#64748b", texto: "#475569" },
+  "lunch/recreo": { punto: "#9ca3af", texto: "#6b7280" },
+};
+
+function normalizarMateria(nombre) {
+  return nombre
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function colorParaMateriaSecundaria(nombre) {
+  const clave = nombre ? normalizarMateria(nombre) : "";
+  if (!clave) return { punto: "#d1d5db", texto: "#9ca3af" };
+  if (COLORES_SECUNDARIA[clave]) return COLORES_SECUNDARIA[clave];
+  for (const [k, v] of Object.entries(COLORES_SECUNDARIA)) {
+    if (clave.includes(k) || k.includes(clave)) return v;
+  }
+  let hash = 0;
+  for (let i = 0; i < clave.length; i++) hash = (hash * 31 + clave.charCodeAt(i)) | 0;
+  return PALETA_FALLA[Math.abs(hash) % PALETA_FALLA.length];
+}
+
 function NotificacionCambioClase({ notificacion, onCerrar }) {
   const [animState, setAnimState] = useState("entering");
 
@@ -3234,6 +3273,311 @@ function VistaHorario({ soloLectura = false }) {
         {editando && (
           <div className="border-t border-gray-100 dark:border-gray-800 px-6 py-3 text-xs text-gray-400">
             Haz clic en cualquier celda para editar el nombre de la materia. Enter para confirmar, Esc para cancelar.
+          </div>
+        )}
+      </div>
+
+      <Toast mensaje={exito} onclose={() => setExito(null)} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Grupo C: Horario de Secundaria                                     */
+/* ------------------------------------------------------------------ */
+
+function GrupoCHorario({ puedeEditar = false }) {
+  const [horario, setHorario] = useState(HORARIO_SECUNDARIA_DEFAULT);
+  const [cargandoHorario, setCargandoHorario] = useState(true);
+  const [editando, setEditando] = useState(false);
+  const [celdaEditando, setCeldaEditando] = useState(null);
+  const [valorCelda, setValorCelda] = useState("");
+  const [exito, setExito] = useState(null);
+  const [ahora, setAhora] = useState(() => new Date());
+
+  useEffect(() => {
+    cargarHorarioGrupoC().then((data) => {
+      setHorario(data);
+      setCargandoHorario(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => setAhora(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const estado = useMemo(() => obtenerEstadoActual(BLOQUES_SECUNDARIA), [ahora]);
+  const materiaActual = obtenerMateriaActual(horario, estado);
+
+  const iniciarEdicion = (bloqueIdx, diaIdx) => {
+    if (!editando) return;
+    setCeldaEditando({ bloqueIdx, diaIdx });
+    setValorCelda(horario.grid[bloqueIdx]?.[diaIdx] || "");
+  };
+
+  const confirmarCelda = () => {
+    if (celdaEditando) {
+      const nuevoGrid = horario.grid.map((fila) => [...fila]);
+      nuevoGrid[celdaEditando.bloqueIdx][celdaEditando.diaIdx] = valorCelda;
+      setHorario({ ...horario, grid: nuevoGrid });
+      setCeldaEditando(null);
+    }
+  };
+
+  const cancelarCelda = () => {
+    setCeldaEditando(null);
+    setValorCelda("");
+  };
+
+  const guardar = async () => {
+    try {
+      await guardarHorarioGrupoC(horario);
+      setEditando(false);
+      setCeldaEditando(null);
+      setExito("Horario guardado correctamente.");
+    } catch (err) {
+      setExito(err.message);
+    }
+  };
+
+  const restaurar = async () => {
+    try {
+      const def = await restaurarHorarioGrupoC();
+      setHorario(def);
+      setCeldaEditando(null);
+      setExito("Horario restaurado al original.");
+    } catch (err) {
+      setExito(err.message);
+    }
+  };
+
+  const descargarHorarioPDF = () => {
+    generarPDFHorario({ grid: horario.grid, dias: DIAS, bloques: BLOQUES_SECUNDARIA });
+  };
+
+  const progresoPct =
+    estado.tipo === "enClase"
+      ? Math.round(((estado.minutosTotales - estado.minutosRestantes) / estado.minutosTotales) * 100)
+      : 0;
+
+  const esFinde = estado.tipo === "finde";
+  const reloj = ahora.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  const diaNombre = estado.diaIdx >= 0 ? DIAS[estado.diaIdx] : "FIN DE SEMANA";
+
+  const tituloActividad =
+    estado.tipo === "enClase"
+      ? materiaActual || "Sin actividad"
+      : estado.tipo === "espera"
+        ? "Receso"
+        : estado.tipo === "terminado"
+          ? "Jornada terminada"
+          : "Fin de semana";
+
+  const subtituloActividad =
+    estado.tipo === "enClase" && estado.diaIdx >= 0 && estado.bloqueIdx >= 0
+      ? `${DIAS[estado.diaIdx]} · ${BLOQUES_SECUNDARIA[estado.bloqueIdx].inicio} – ${BLOQUES_SECUNDARIA[estado.bloqueIdx].fin}`
+      : estado.tipo === "espera" && estado.diaIdx >= 0 && estado.bloqueIdx >= 0
+        ? `${DIAS[estado.diaIdx]} · Siguiente: ${horario.grid[estado.bloqueIdx]?.[estado.diaIdx] || "—"} (${BLOQUES_SECUNDARIA[estado.bloqueIdx].inicio})`
+        : estado.tipo === "terminado" && estado.siguienteDia >= 0
+          ? `Mañana ${DIAS[estado.siguienteDia]} · ${horario.grid[0]?.[estado.siguienteDia] || "—"}`
+          : diaNombre;
+
+  if (cargandoHorario) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+            <Calendar className="h-4 w-4 text-gray-400" />
+            Horario · Secundaria
+          </h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Horario semanal de Secundaria. Los cambios se sincronizan con todos los dispositivos.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={descargarHorarioPDF}
+          className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+        >
+          <Download className="h-3.5 w-3.5" />
+          PDF
+        </button>
+      </div>
+
+      {/* Card: en curso ahora */}
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-4 py-4 text-white lg:px-6 lg:py-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-gray-400">En curso ahora</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight">{tituloActividad}</p>
+              <p className="mt-1 text-sm text-gray-400">{subtituloActividad}</p>
+            </div>
+            {!esFinde && (
+              <div className="text-right">
+                <p className="text-2xl font-bold tabular-nums tracking-tight lg:text-3xl">{reloj}</p>
+                <p className="text-xs text-gray-400">{diaNombre}</p>
+              </div>
+            )}
+          </div>
+
+          {estado.tipo === "enClase" && (
+            <div className="mt-5">
+              <div className="mb-1.5 flex items-center justify-between text-xs text-gray-400">
+                <span>Progreso de la clase</span>
+                <span>{estado.minutosRestantes} min restantes</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-500 transition-all duration-1000"
+                  style={{ width: `${progresoPct}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {estado.tipo === "espera" && (
+            <div className="mt-4 text-sm text-gray-400">
+              Siguiente clase en{" "}
+              <span className="font-semibold text-white">{estado.minutosParaSiguiente} min</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Grid del horario */}
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-800">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Vista semanal</p>
+          <div className="flex flex-wrap gap-2">
+            {editando ? (
+              <>
+                <button
+                  type="button"
+                  onClick={restaurar}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Restaurar
+                </button>
+                <button
+                  type="button"
+                  onClick={guardar}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-gray-800 dark:bg-blue-600 dark:hover:bg-blue-500"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Guardar
+                </button>
+              </>
+            ) : (
+              puedeEditar && (
+                <button
+                  type="button"
+                  onClick={() => setEditando(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-4 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Editar
+                </button>
+              )
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50 text-left text-gray-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-400">
+                <th className="px-3 py-3 text-xs font-medium uppercase tracking-wide lg:px-5">Hora</th>
+                {DIAS.map((d) => (
+                  <th
+                    key={d}
+                    className={`px-3 py-3 text-xs font-medium uppercase tracking-wide lg:px-5 ${
+                      estado.diaIdx === DIAS.indexOf(d) ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300" : ""
+                    }`}
+                  >
+                    {d}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {BLOQUES_SECUNDARIA.map((bloque, bIdx) => (
+                <tr
+                  key={bloque.inicio}
+                  className={bIdx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50/50 dark:bg-gray-800/40"}
+                >
+                  <td className="whitespace-nowrap px-3 py-3.5 text-xs font-medium text-gray-500 dark:text-gray-400 lg:px-5">
+                    {bloque.inicio} – {bloque.fin}
+                  </td>
+                  {DIAS.map((d, dIdx) => {
+                    const esActual = estado.tipo === "enClase" && estado.bloqueIdx === bIdx && estado.diaIdx === dIdx;
+                    const valor = horario.grid[bIdx]?.[dIdx] || "";
+                    const editandoEsta = celdaEditando?.bloqueIdx === bIdx && celdaEditando?.diaIdx === dIdx;
+                    const color = colorParaMateriaSecundaria(valor);
+
+                    return (
+                      <td
+                        key={d}
+                        onClick={() => iniciarEdicion(bIdx, dIdx)}
+                        className={`px-3 py-3.5 text-sm lg:px-5 ${
+                          editando ? "cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-500/10" : ""
+                        } ${esActual ? "bg-blue-50/60 ring-1 ring-inset ring-blue-200 dark:bg-blue-500/15 dark:ring-blue-500/30" : ""}`}
+                      >
+                        {editandoEsta ? (
+                          <input
+                            type="text"
+                            value={valorCelda}
+                            onChange={(e) => setValorCelda(e.target.value)}
+                            onBlur={confirmarCelda}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") confirmarCelda();
+                              if (e.key === "Escape") cancelarCelda();
+                            }}
+                            autoFocus
+                            className="w-full rounded-lg border border-blue-300 bg-white px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-blue-500/30"
+                          />
+                        ) : (
+                          <span
+                            className={`inline-flex items-center gap-1.5 ${valor ? "font-medium texto-materia" : "text-gray-300 dark:text-gray-500"}`}
+                            style={{
+                              "--materia-texto": color.texto,
+                              "--materia-punto": color.punto,
+                            }}
+                          >
+                            {valor && (
+                              <span
+                                className="h-2 w-2 shrink-0 rounded-full"
+                                style={{ backgroundColor: color.punto }}
+                              />
+                            )}
+                            {valor || "—"}
+                            {esActual && (
+                              <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                            )}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {editando && (
+          <div className="border-t border-gray-100 px-6 py-3 text-xs text-gray-400 dark:border-gray-800">
+            Haz clic en cualquier celda para editar la materia. Enter para confirmar, Esc para cancelar.
           </div>
         )}
       </div>
@@ -4466,11 +4810,17 @@ function VistaGrupoC({ sesion }) {
     );
   }
 
-  const tabs = [
-    { id: "individual", nombre: "Individual", icon: UserSearch },
-    { id: "tabla", nombre: "Tabla", icon: ClipboardList },
-    { id: "matriz", nombre: "Matriz general", icon: Table2 },
-  ];
+  const tabs = soloAlumno
+    ? [
+        { id: "individual", nombre: "Individual", icon: UserSearch },
+        { id: "horario", nombre: "Horario", icon: Calendar },
+      ]
+    : [
+        { id: "individual", nombre: "Individual", icon: UserSearch },
+        { id: "tabla", nombre: "Tabla", icon: ClipboardList },
+        { id: "matriz", nombre: "Matriz general", icon: Table2 },
+        { id: "horario", nombre: "Horario", icon: Calendar },
+      ];
 
   return (
     <div className="space-y-4">
@@ -4497,31 +4847,31 @@ function VistaGrupoC({ sesion }) {
         )}
       </div>
 
-      {!soloAlumno && (
-        <div className="inline-flex flex-wrap gap-1 rounded-full border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900">
-          {tabs.map((tab) => {
-            const Icono = tab.icon;
-            const activa = seccion === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setSeccion(tab.id)}
-                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${
-                  activa
-                    ? "bg-gray-900 text-white dark:bg-blue-600"
-                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
-                }`}
-              >
-                <Icono className="h-4 w-4" />
-                {tab.nombre}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <div className="inline-flex flex-wrap gap-1 rounded-full border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900">
+        {tabs.map((tab) => {
+          const Icono = tab.icon;
+          const activa = seccion === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setSeccion(tab.id)}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${
+                activa
+                  ? "bg-gray-900 text-white dark:bg-blue-600"
+                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+              }`}
+            >
+              <Icono className="h-4 w-4" />
+              {tab.nombre}
+            </button>
+          );
+        })}
+      </div>
 
-      {soloAlumno ? (
+      {seccion === "horario" ? (
+        <GrupoCHorario puedeEditar={puedeEditar} />
+      ) : soloAlumno ? (
         alumnoActual ? (
           <GrupoCIndividual
             alumno={alumnoActual}

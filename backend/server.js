@@ -641,6 +641,55 @@ app.post("/api/grupo-c/paginas/ajustar", editarGrupoC, async (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Horario de Secundaria (Grupo C)                                    */
+/* ------------------------------------------------------------------ */
+
+const HORARIO_GRUPO_C_DEFAULT = [
+  ["", "", "", "", ""],
+  ["INGLES", "INGLES", "BIOLOGÍA", "QUÍMICA", "DEPORTES"],
+  ["ESPAÑOL", "ESPAÑOL", "INGLES", "ESPAÑOL", "GEOGRAFIA"],
+  ["ORTOGRAFIA / CALIGRAFIA", "LITERATURA", "INGLES", "LITERATURA U ORTOGRAFIA", "HISTORIA"],
+  ["LUNCH/RECREO", "LUNCH/RECREO", "LUNCH/RECREO", "LUNCH/RECREO", "LUNCH/RECREO"],
+  ["HISTORIA", "MATEMÁTICAS", "MATEMÁTICAS", "INGLES", "MATEMÁTICAS"],
+  ["BIOLOGÍA", "MATEMÁTICAS", "GEOGRAFIA", "HISTORIA", "MATEMÁTICAS"],
+];
+
+function gridValido(grid) {
+  if (!Array.isArray(grid) || grid.length === 0) return false;
+  return grid.every(
+    (fila) => Array.isArray(fila) && fila.every((celda) => typeof celda === "string")
+  );
+}
+
+app.get("/api/grupo-c/horario", verGrupoC, async (req, res) => {
+  try {
+    const result = await pool.query("SELECT grid FROM horario_grupo_c WHERE id = 1");
+    if (result.rowCount === 0) return res.json({ grid: HORARIO_GRUPO_C_DEFAULT });
+    res.json({ grid: result.rows[0].grid });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/grupo-c/horario", editarGrupoC, async (req, res) => {
+  try {
+    const { grid } = req.body;
+    if (!gridValido(grid)) {
+      return res.status(400).json({ error: "grid invalido" });
+    }
+    await pool.query(
+      `INSERT INTO horario_grupo_c (id, grid, actualizado_en)
+       VALUES (1, $1, now())
+       ON CONFLICT (id) DO UPDATE SET grid = $1, actualizado_en = now()`,
+      [JSON.stringify(grid)]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /*  Progreso                                                           */
 /* ------------------------------------------------------------------ */
 
