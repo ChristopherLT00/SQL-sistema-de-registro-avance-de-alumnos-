@@ -85,9 +85,9 @@ import { generarExcelAvance, generarExcelMatriz } from "./excel";
 import {
   DIAS,
   BLOQUES,
-  BLOQUES_SECUNDARIA,
+  BLOQUES_GRUPO_C,
   HORARIO_DEFAULT,
-  HORARIO_SECUNDARIA_DEFAULT,
+  HORARIO_GRUPO_C_DEFAULT,
   cargarHorario,
   guardarHorario,
   restaurarHorario,
@@ -2866,16 +2866,17 @@ function colorParaMateria(nombre) {
   return PALETA_FALLA[Math.abs(hash) % PALETA_FALLA.length];
 }
 
-const COLORES_SECUNDARIA = {
+const COLORES_GRUPO_C = {
   "ingles": { punto: "#2563eb", texto: "#1d4ed8" },
   "español": { punto: "#22c55e", texto: "#15803d" },
-  "literatura": { punto: "#16a34a", texto: "#166534" },
-  "ortografia / caligrafia": { punto: "#4ade80", texto: "#15803d" },
   "biología": { punto: "#14b8a6", texto: "#0f766e" },
   "química": { punto: "#0d9488", texto: "#115e59" },
   "historia": { punto: "#ef4444", texto: "#b91c1c" },
   "matemáticas": { punto: "#f59e0b", texto: "#b45309" },
-  "geografia": { punto: "#06b6d4", texto: "#0e7490" },
+  "física": { punto: "#f97316", texto: "#c2410c" },
+  "geografía": { punto: "#06b6d4", texto: "#0e7490" },
+  "proyecto": { punto: "#be185d", texto: "#9d174d" },
+  "academia": { punto: "#92400e", texto: "#78350f" },
   "deportes": { punto: "#64748b", texto: "#475569" },
   "lunch/recreo": { punto: "#9ca3af", texto: "#6b7280" },
 };
@@ -2885,15 +2886,16 @@ function normalizarMateria(nombre) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-function colorParaMateriaSecundaria(nombre) {
+function colorParaMateriaGrupoC(nombre) {
   const clave = nombre ? normalizarMateria(nombre) : "";
   if (!clave) return { punto: "#d1d5db", texto: "#9ca3af" };
-  if (COLORES_SECUNDARIA[clave]) return COLORES_SECUNDARIA[clave];
-  for (const [k, v] of Object.entries(COLORES_SECUNDARIA)) {
-    if (clave.includes(k) || k.includes(clave)) return v;
+  for (const [k, v] of Object.entries(COLORES_GRUPO_C)) {
+    const claveColor = normalizarMateria(k);
+    if (clave === claveColor || clave.includes(claveColor)) return v;
   }
   let hash = 0;
   for (let i = 0; i < clave.length; i++) hash = (hash * 31 + clave.charCodeAt(i)) | 0;
@@ -3283,11 +3285,11 @@ function VistaHorario({ soloLectura = false }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Grupo C: Horario de Secundaria                                     */
+/*  Grupo C: Horario del grupo                                        */
 /* ------------------------------------------------------------------ */
 
 function GrupoCHorario({ puedeEditar = false }) {
-  const [horario, setHorario] = useState(HORARIO_SECUNDARIA_DEFAULT);
+  const [horario, setHorario] = useState(HORARIO_GRUPO_C_DEFAULT);
   const [cargandoHorario, setCargandoHorario] = useState(true);
   const [editando, setEditando] = useState(false);
   const [celdaEditando, setCeldaEditando] = useState(null);
@@ -3307,7 +3309,7 @@ function GrupoCHorario({ puedeEditar = false }) {
     return () => clearInterval(t);
   }, []);
 
-  const estado = useMemo(() => obtenerEstadoActual(BLOQUES_SECUNDARIA), [ahora]);
+  const estado = useMemo(() => obtenerEstadoActual(BLOQUES_GRUPO_C), [ahora]);
   const materiaActual = obtenerMateriaActual(horario, estado);
 
   const iniciarEdicion = (bloqueIdx, diaIdx) => {
@@ -3353,7 +3355,7 @@ function GrupoCHorario({ puedeEditar = false }) {
   };
 
   const descargarHorarioPDF = () => {
-    generarPDFHorario({ grid: horario.grid, dias: DIAS, bloques: BLOQUES_SECUNDARIA });
+    generarPDFHorario({ grid: horario.grid, dias: DIAS, bloques: BLOQUES_GRUPO_C });
   };
 
   const progresoPct =
@@ -3376,9 +3378,9 @@ function GrupoCHorario({ puedeEditar = false }) {
 
   const subtituloActividad =
     estado.tipo === "enClase" && estado.diaIdx >= 0 && estado.bloqueIdx >= 0
-      ? `${DIAS[estado.diaIdx]} · ${BLOQUES_SECUNDARIA[estado.bloqueIdx].inicio} – ${BLOQUES_SECUNDARIA[estado.bloqueIdx].fin}`
+      ? `${DIAS[estado.diaIdx]} · ${BLOQUES_GRUPO_C[estado.bloqueIdx].inicio} – ${BLOQUES_GRUPO_C[estado.bloqueIdx].fin}`
       : estado.tipo === "espera" && estado.diaIdx >= 0 && estado.bloqueIdx >= 0
-        ? `${DIAS[estado.diaIdx]} · Siguiente: ${horario.grid[estado.bloqueIdx]?.[estado.diaIdx] || "—"} (${BLOQUES_SECUNDARIA[estado.bloqueIdx].inicio})`
+        ? `${DIAS[estado.diaIdx]} · Siguiente: ${horario.grid[estado.bloqueIdx]?.[estado.diaIdx] || "—"} (${BLOQUES_GRUPO_C[estado.bloqueIdx].inicio})`
         : estado.tipo === "terminado" && estado.siguienteDia >= 0
           ? `Mañana ${DIAS[estado.siguienteDia]} · ${horario.grid[0]?.[estado.siguienteDia] || "—"}`
           : diaNombre;
@@ -3397,10 +3399,10 @@ function GrupoCHorario({ puedeEditar = false }) {
         <div>
           <h3 className="flex items-center gap-2 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
             <Calendar className="h-4 w-4 text-gray-400" />
-            Horario · Secundaria
+            Horario · Grupo C
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Horario semanal de Secundaria. Los cambios se sincronizan con todos los dispositivos.
+            Horario semanal del Grupo C. Los cambios se sincronizan con todos los dispositivos.
           </p>
         </div>
         <button
@@ -3511,7 +3513,7 @@ function GrupoCHorario({ puedeEditar = false }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {BLOQUES_SECUNDARIA.map((bloque, bIdx) => (
+              {BLOQUES_GRUPO_C.map((bloque, bIdx) => (
                 <tr
                   key={bloque.inicio}
                   className={bIdx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50/50 dark:bg-gray-800/40"}
@@ -3523,7 +3525,7 @@ function GrupoCHorario({ puedeEditar = false }) {
                     const esActual = estado.tipo === "enClase" && estado.bloqueIdx === bIdx && estado.diaIdx === dIdx;
                     const valor = horario.grid[bIdx]?.[dIdx] || "";
                     const editandoEsta = celdaEditando?.bloqueIdx === bIdx && celdaEditando?.diaIdx === dIdx;
-                    const color = colorParaMateriaSecundaria(valor);
+                    const color = colorParaMateriaGrupoC(valor);
 
                     return (
                       <td

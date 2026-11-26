@@ -10,7 +10,7 @@ export const BLOQUES = [
   { inicio: "13:00", fin: "14:00" },
 ];
 
-export const BLOQUES_SECUNDARIA = [
+export const BLOQUES_GRUPO_C = [
   { inicio: "08:00", fin: "09:00" },
   { inicio: "09:00", fin: "10:00" },
   { inicio: "10:00", fin: "11:00" },
@@ -30,15 +30,15 @@ export const HORARIO_DEFAULT = {
   ],
 };
 
-export const HORARIO_SECUNDARIA_DEFAULT = {
+export const HORARIO_GRUPO_C_DEFAULT = {
   grid: [
     ["", "", "", "", ""],
-    ["INGLES", "INGLES", "BIOLOGÍA", "QUÍMICA", "DEPORTES"],
-    ["ESPAÑOL", "ESPAÑOL", "INGLES", "ESPAÑOL", "GEOGRAFIA"],
-    ["ORTOGRAFIA / CALIGRAFIA", "LITERATURA", "INGLES", "LITERATURA U ORTOGRAFIA", "HISTORIA"],
+    ["BIOLOGÍA", "PROYECTO", "INGLES", "PROGRAMA GEOGRAFÍA", "DEPORTES"],
+    ["INGLES", "INGLES", "PROGRAMA ESPAÑOL", "PROGRAMA HISTORIA", "PROYECTO"],
+    ["INGLES", "INGLES", "PROGRAMA MATEMÁTICAS", "PROGRAMA FÍSICA", "PROYECTO"],
     ["LUNCH/RECREO", "LUNCH/RECREO", "LUNCH/RECREO", "LUNCH/RECREO", "LUNCH/RECREO"],
-    ["HISTORIA", "MATEMÁTICAS", "MATEMÁTICAS", "INGLES", "MATEMÁTICAS"],
-    ["BIOLOGÍA", "MATEMÁTICAS", "GEOGRAFIA", "HISTORIA", "MATEMÁTICAS"],
+    ["ACADEMIA", "ACADEMIA", "PROYECTO", "PROYECTO", "QUÍMICA"],
+    ["ACADEMIA", "ACADEMIA", "PROYECTO", "PROYECTO", "PROYECTO"],
   ],
 };
 
@@ -115,10 +115,10 @@ export async function restaurarHorario() {
 export async function cargarHorarioGrupoC() {
   try {
     const data = await fetchHorarioGrupoC();
-    if (!data || !Array.isArray(data.grid)) return structuredClone(HORARIO_SECUNDARIA_DEFAULT);
+    if (!data || !Array.isArray(data.grid)) return structuredClone(HORARIO_GRUPO_C_DEFAULT);
     return { grid: data.grid };
   } catch {
-    return structuredClone(HORARIO_SECUNDARIA_DEFAULT);
+    return structuredClone(HORARIO_GRUPO_C_DEFAULT);
   }
 }
 
@@ -127,7 +127,7 @@ export async function guardarHorarioGrupoC(datos) {
 }
 
 export async function restaurarHorarioGrupoC() {
-  const def = structuredClone(HORARIO_SECUNDARIA_DEFAULT);
+  const def = structuredClone(HORARIO_GRUPO_C_DEFAULT);
   await saveHorarioGrupoC(def.grid);
   return def;
 }
