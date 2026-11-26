@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const crypto = require("crypto");
 const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -1012,6 +1013,153 @@ function validarUsuario({ usuario, contrasena, rol, id_alumno, id_alumno_c }) {
   }
   return null;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Contrasenas de alumnos de Grupo C (derivadas del nombre)           */
+/* ------------------------------------------------------------------ */
+
+const CLAVE_ALUMNOS_FILA = "contrasena_alumnos_secreto";
+
+function normalizarNombreContrasena(nombre) {
+  return String(nombre)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+async function obtenerClaveAlumnos() {
+  try {
+    const result = await pool.query(
+      "SELECT valor FROM configuracion WHERE clave = $1",
+      [CLAVE_ALUMNOS_FILA]
+    );
+    return result.rowCount > 0 ? result.rows[0].valor : null;
+  } catch (err) {
+    if (err.code === "42P01") {
+      throw new Error("Falta la tabla configuracion. Ejecuta configuracion.sql en la base de datos.");
+    }
+    throw err;
+  }
+}
+
+function derivarContrasena(nombre, clave) {
+  const base = normalizarNombreContrasena(nombre);
+  const hash = crypto.createHmac("sha256", clave).update(`grupo-c:${base}`).digest("hex");
+  const digitos = String(parseInt(hash.slice(0, 8), 16) % 10000).padStart(4, "0");
+  return `${base}-${digitos}`;
+}
+
+app.get("/api/configuracion/clave-alumnos", soloAdmin, async (req, res) => {
+  try {
+    const clave = await obtenerClaveAlumnos();
+    res.json({ definido: Boolean(clave) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/configuracion/clave-alumnos", soloAdmin, async (req, res) => {
+  try {
+    const valor = String(req.body.valor ?? "").trim();
+    if (valor.length < 6) {
+      return res.status(400).json({ error: "La clave secreta debe tener al menos 6 caracteres" });
+    }
+    await pool.query(
+      `INSERT INTO configuracion (clave, valor, actualizado_en)
+       VALUES ($1, $2, now())
+       ON CONFLICT (clave) DO UPDATE SET valor = $2, actualizado_en = now()`,
+      [CLAVE_ALUMNOS_FILA, valor]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/usuarios/alumnos-c", soloAdmin, async (req, res) => {
+  try {
+    const clave = await obtenerClaveAlumnos();
+    if (!clave) {
+      return res.status(400).json({ error: "Primero define la clave secreta de las contrasenas" });
+    }
+    const alumnos = await pool.query(
+      "SELECT id_alumno_c, nombre FROM grupo_c_alumnos ORDER BY nombre"
+    );
+    const resultado = [];
+    for (const alumno of alumnos.rows) {
+      const base = normalizarNombreContrasena(alumno.nombre);
+      const contrasena = derivarContrasena(alumno.nombre, clave);
+      const hash = await bcrypt.hash(contrasena, 10);
+
+      const vinculada = await pool.query(
+        "SELECT id_usuario, usuario FROM usuarios WHERE id_alumno_c = $1",
+        [alumno.id_alumno_c]
+      );
+      if (vinculada.rowCount > 0) {
+        const cuenta = vinculada.rows[0];
+        await pool.query(
+          "UPDATE usuarios SET contrasena = $1, rol = 'alumno_c' WHERE id_usuario = $2",
+          [hash, cuenta.id_usuario]
+        );
+        resultado.push({
+          id_usuario: cuenta.id_usuario,
+          usuario: cuenta.usuario,
+          nombre: alumno.nombre,
+          contrasena,
+          creado: false,
+        });
+        continue;
+      }
+
+      let usuario = base;
+      for (let intento = 0; intento < 5; intento++) {
+        const existe = await pool.query("SELECT 1 FROM usuarios WHERE usuario = $1", [usuario]);
+        if (existe.rowCount === 0) break;
+        usuario = intento === 0 ? `${base}${alumno.id_alumno_c}` : `${base}${alumno.id_alumno_c}${intento}`;
+      }
+      const creada = await pool.query(
+        `INSERT INTO usuarios (usuario, contrasena, rol, id_alumno, id_alumno_c)
+         VALUES ($1, $2, 'alumno_c', NULL, $3)
+         RETURNING id_usuario`,
+        [usuario, hash, alumno.id_alumno_c]
+      );
+      resultado.push({
+        id_usuario: creada.rows[0].id_usuario,
+        usuario,
+        nombre: alumno.nombre,
+        contrasena,
+        creado: true,
+      });
+    }
+    res.json(resultado);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/usuarios/:id/contrasena", soloAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT u.id_usuario, u.usuario, u.rol, gc.nombre
+       FROM usuarios u
+       LEFT JOIN grupo_c_alumnos gc ON gc.id_alumno_c = u.id_alumno_c
+       WHERE u.id_usuario = $1`,
+      [id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Usuario no encontrado" });
+    const user = result.rows[0];
+    if (user.rol !== "alumno_c" || !user.nombre) {
+      return res.status(400).json({ error: "Solo aplica a cuentas de alumnos de Grupo C vinculadas" });
+    }
+    const clave = await obtenerClaveAlumnos();
+    if (!clave) return res.status(400).json({ error: "Falta la clave secreta de las contrasenas" });
+    res.json({ usuario: user.usuario, contrasena: derivarContrasena(user.nombre, clave) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get("/api/usuarios", soloAdmin, async (req, res) => {
   try {

@@ -350,6 +350,49 @@ export async function deleteUsuario(id) {
   return res.json();
 }
 
+export async function fetchClaveAlumnos() {
+  const res = await fetch(`${API}/configuracion/clave-alumnos`, { headers: authHeaders() });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al obtener la clave de alumnos");
+  }
+  return res.json();
+}
+
+export async function guardarClaveAlumnos(valor) {
+  const res = await fetch(`${API}/configuracion/clave-alumnos`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ valor }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al guardar la clave de alumnos");
+  }
+  return res.json();
+}
+
+export async function crearUsuariosAlumnosC() {
+  const res = await fetch(`${API}/usuarios/alumnos-c`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al crear las cuentas de alumnos");
+  }
+  return res.json();
+}
+
+export async function obtenerContrasenaUsuario(id) {
+  const res = await fetch(`${API}/usuarios/${id}/contrasena`, { headers: authHeaders() });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Error al obtener la contrasena");
+  }
+  return res.json();
+}
+
 /* ------------------------------------------------------------------ */
 /*  Grupo C: conteo de paginas de libros                               */
 /* ------------------------------------------------------------------ */

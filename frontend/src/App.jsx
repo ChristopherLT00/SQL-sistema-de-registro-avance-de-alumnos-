@@ -65,6 +65,10 @@ import {
   createUsuario,
   updateUsuario,
   deleteUsuario,
+  fetchClaveAlumnos,
+  guardarClaveAlumnos,
+  crearUsuariosAlumnosC,
+  obtenerContrasenaUsuario,
   fetchEntregas,
   fetchGrupoCDatos,
   fetchGrupoCAlumnos,
@@ -4994,6 +4998,13 @@ function VistaUsuarios({ alumnos }) {
   const [eliminando, setEliminando] = useState(null);
   const [cambiando, setCambiando] = useState(null);
   const [nuevaContrasena, setNuevaContrasena] = useState("");
+  const [claveAlumnos, setClaveAlumnos] = useState(null);
+  const [claveInput, setClaveInput] = useState("");
+  const [guardandoClave, setGuardandoClave] = useState(false);
+  const [generandoCuentas, setGenerandoCuentas] = useState(false);
+  const [cuentasAlumnos, setCuentasAlumnos] = useState(null);
+  const [verContrasena, setVerContrasena] = useState(null);
+  const [copiado, setCopiado] = useState(null);
   const miSesion = obtenerSesion();
 
   const cargar = useCallback(async () => {
@@ -5016,6 +5027,12 @@ function VistaUsuarios({ alumnos }) {
     fetchGrupoCAlumnos()
       .then((lista) => setAlumnosC(lista))
       .catch(() => setAlumnosC([]));
+  }, []);
+
+  useEffect(() => {
+    fetchClaveAlumnos()
+      .then((data) => setClaveAlumnos(data))
+      .catch(() => setClaveAlumnos({ definido: false }));
   }, []);
 
   const crear = async (e) => {
@@ -5074,6 +5091,66 @@ function VistaUsuarios({ alumnos }) {
     } finally {
       setGuardando(false);
     }
+  };
+
+  const guardarClave = async () => {
+    if (claveInput.trim().length < 6) {
+      setError("La clave secreta debe tener al menos 6 caracteres.");
+      return;
+    }
+    setGuardandoClave(true);
+    setError(null);
+    try {
+      await guardarClaveAlumnos(claveInput.trim());
+      setClaveAlumnos({ definido: true });
+      setClaveInput("");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardandoClave(false);
+    }
+  };
+
+  const generarCuentas = async () => {
+    setGenerandoCuentas(true);
+    setError(null);
+    try {
+      const lista = await crearUsuariosAlumnosC();
+      setCuentasAlumnos(lista);
+      await cargar();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGenerandoCuentas(false);
+    }
+  };
+
+  const verContrasenaDe = async (u) => {
+    setError(null);
+    try {
+      const data = await obtenerContrasenaUsuario(u.id_usuario);
+      setVerContrasena(data);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const copiar = async (texto, marca) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiado(marca);
+      setTimeout(() => setCopiado((actual) => (actual === marca ? null : actual)), 1500);
+    } catch {
+      setError("No se pudo copiar. Copia manualmente.");
+    }
+  };
+
+  const copiarTodas = () => {
+    if (!cuentasAlumnos) return;
+    const texto = cuentasAlumnos
+      .map((c) => `${c.nombre} · usuario: ${c.usuario} · contrasena: ${c.contrasena}`)
+      .join("\n");
+    copiar(texto, "__todas__");
   };
 
   const nombreAlumno = (id) =>
@@ -5246,6 +5323,15 @@ function VistaUsuarios({ alumnos }) {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex gap-2">
+                        {u.rol === "alumno_c" && u.id_alumno_c && (
+                          <button
+                            type="button"
+                            onClick={() => verContrasenaDe(u)}
+                            className="rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                          >
+                            Ver
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -5272,6 +5358,128 @@ function VistaUsuarios({ alumnos }) {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Cuentas de alumnos de Grupo C
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Contraseñas fáciles de recordar: nombre + 4 números (ej. <span className="font-mono">andrea-4821</span>).
+              Los números salen de una clave secreta que solo tú conoces; los alumnos no pueden calcular la de sus compañeros.
+            </p>
+          </div>
+          {claveAlumnos?.definido ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 dark:bg-green-500/10 dark:text-green-300">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Clave secreta configurada
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+              <KeyRound className="h-3.5 w-3.5" />
+              Falta la clave secreta
+            </span>
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="flex-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+            Clave secreta (mínimo 6 caracteres)
+            <input
+              type="password"
+              value={claveInput}
+              onChange={(e) => setClaveInput(e.target.value)}
+              placeholder="Solo tú la conoces; no se muestra a los alumnos"
+              className={`${campoSelect} mt-1`}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={guardarClave}
+            disabled={guardandoClave || claveInput.trim().length < 6}
+            className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:bg-blue-600 dark:hover:bg-blue-500 dark:disabled:bg-gray-700 dark:disabled:text-gray-500"
+          >
+            {guardandoClave && <Loader2 className="h-4 w-4 animate-spin" />}
+            Guardar clave
+          </button>
+        </div>
+        <p className="mt-1.5 text-[11px] text-gray-400">
+          Si cambias la clave después de crear las cuentas, las próximas contraseñas saldrán distintas:
+          vuelve a pulsar “Crear/actualizar cuentas” antes de repartirlas.
+        </p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={generarCuentas}
+            disabled={generandoCuentas || !claveAlumnos?.definido}
+            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:disabled:text-gray-600"
+          >
+            {generandoCuentas ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+            Crear/actualizar cuentas
+          </button>
+          {cuentasAlumnos && cuentasAlumnos.length > 0 && (
+            <button
+              type="button"
+              onClick={copiarTodas}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              {copiado === "__todas__" ? "Copiado" : "Copiar todas"}
+            </button>
+          )}
+        </div>
+
+        {cuentasAlumnos && (
+          <div className="mt-4 overflow-x-auto rounded-xl border border-gray-100 dark:border-gray-800">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:border-gray-800 dark:bg-gray-950">
+                  <th className="px-4 py-2.5 font-medium">Alumno</th>
+                  <th className="px-4 py-2.5 font-medium">Usuario</th>
+                  <th className="px-4 py-2.5 font-medium">Contraseña</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                {cuentasAlumnos.map((c) => (
+                  <tr key={c.usuario} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">{c.nombre}</td>
+                    <td className="px-4 py-2.5 font-medium text-gray-900 dark:text-gray-100">{c.usuario}</td>
+                    <td className="px-4 py-2.5">
+                      <span className="inline-flex items-center gap-2">
+                        <code className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+                          {c.contrasena}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => copiar(c.contrasena, c.usuario)}
+                          className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                          title="Copiar contraseña"
+                        >
+                          {copiado === c.usuario ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        </button>
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <span
+                        className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                          c.creado
+                            ? "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300"
+                            : "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+                        }`}
+                      >
+                        {c.creado ? "Creada" : "Actualizada"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {eliminando && (
@@ -5353,6 +5561,46 @@ function VistaUsuarios({ alumnos }) {
               >
                 {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
                 Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {verContrasena && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90dvh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Contraseña de la cuenta</h3>
+              <button
+                type="button"
+                onClick={() => setVerContrasena(null)}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Cuenta: <span className="font-medium">{verContrasena.usuario}</span>
+            </p>
+            <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-950">
+              <code className="font-mono text-sm text-gray-900 dark:text-gray-100">{verContrasena.contrasena}</code>
+              <button
+                type="button"
+                onClick={() => copiar(verContrasena.contrasena, "modal")}
+                className="rounded-full p-1.5 text-gray-400 hover:bg-white hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                title="Copiar"
+              >
+                {copiado === "modal" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </button>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setVerContrasena(null)}
+                className="rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:bg-blue-600 dark:hover:bg-blue-500"
+              >
+                Cerrar
               </button>
             </div>
           </div>
